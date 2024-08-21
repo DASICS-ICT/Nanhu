@@ -104,7 +104,7 @@ class MiscExuImpl(outer:MiscExu, exuCfg:ExuConfig)(implicit p:Parameters) extend
     csr.io.in.valid := true.B
     csr.io.in.bits.src(0) := fdicallTargetReg
     csr.io.in.bits.uop.ctrl.rfWen := false.B
-    csr.io.in.bits.uop.ctrl.imm := csr.Fdireturnpc.U
+    csr.io.in.bits.uop.ctrl.imm := csr.FDIReturnPc.U
     csr.io.in.bits.uop.ctrl.fuOpType := CSROpType.wrt
   }
 
