@@ -28,6 +28,7 @@ import xiangshan.backend.execute.fu._
 import xiangshan.backend.issue.{RSFeedback, RSFeedbackType, RsIdx}
 import xiangshan.cache.mmu.{TlbCmd, TlbReq, TlbRequestIO, TlbResp}
 import xs.utils.perf.HasPerfLogging
+import xiangshan.backend.execute.fu.csr.HasCSRConst
 
 // Store Pipeline Stage 0
 // Generate addr, use addr to query DCache and DTLB
@@ -105,7 +106,7 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging 
     val lsq = ValidIO(new LsPipelineBundle())
     val dtlbResp = Flipped(DecoupledIO(new TlbResp(if(UseOneDtlb) 2 else 1)))
     val rsFeedback = ValidIO(new RSFeedback)
-    val fdiReq = ValidIO(new FDIReqBundle())
+    val dasicsReq = ValidIO(new DasicsReqBundle())
   })
 
   val EnableMem = io.in.bits.uop.loadStoreEnable
@@ -119,11 +120,11 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging 
   val s1_mmio = is_mmio_cbo
   val s1_exception = Mux(EnableMem, ExceptionNO.selectByFu(io.out.bits.uop.cf.exceptionVec, staCfg).asUInt.orR, false.B)
 
-  //FDI check
-  io.fdiReq.valid := io.out.fire  //TODO: temporarily assignment
-  io.fdiReq.bits.addr := io.out.bits.vaddr //TODO: need for alignment?
-  io.fdiReq.bits.inUntrustedZone := io.out.bits.uop.fdiUntrusted
-  io.fdiReq.bits.operation := FDIOp.write
+  //Dasics check
+  io.dasicsReq.valid := io.out.fire  //TODO: temporarily assignment
+  io.dasicsReq.bits.addr := io.out.bits.vaddr //TODO: need for alignment?
+  io.dasicsReq.bits.inUntrustedZone := io.out.bits.uop.cf.dasicsUntrusted
+  io.dasicsReq.bits.operation := DasicsOp.write
 
   io.in.ready := true.B
 
@@ -152,6 +153,12 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging 
   io.out.bits.uop.cf.exceptionVec(storePageFault) := (io.dtlbResp.bits.excp(0).pf.st || io.in.bits.uop.cf.exceptionVec(storePageFault)) && EnableMem
   io.out.bits.uop.cf.exceptionVec(storeAccessFault) := io.dtlbResp.bits.excp(0).af.st && EnableMem
 
+  when (io.dtlbResp.bits.excp(0).pkf.st) {
+    io.out.bits.uop.cf.exceptionVec(dasicsUCheckFault) := io.in.bits.uop.cf.exceptionVec(dasicsUCheckFault) || io.dtlbResp.bits.excp(0).pkf.isUser
+    io.out.bits.uop.cf.exceptionVec(dasicsSCheckFault) := io.in.bits.uop.cf.exceptionVec(dasicsSCheckFault) || !io.dtlbResp.bits.excp(0).pkf.isUser
+    io.out.bits.uop.cf.dasicsFaultReason := Mux(DasicsFaultReason.StoreMPKFault > io.in.bits.uop.cf.dasicsFaultReason, DasicsFaultReason.StoreMPKFault, io.in.bits.uop.cf.dasicsFaultReason)
+  }
+
   io.lsq.valid := io.in.valid
   io.lsq.bits := io.out.bits
   io.lsq.bits.miss := s1_tlb_miss
@@ -166,13 +173,13 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging 
   XSPerfAccumulate("tlb_miss_first_issue", io.in.fire && s1_tlb_miss && io.in.bits.isFirstIssue)
 }
 
-class StoreUnit_S2(implicit p: Parameters) extends XSModule {
+class StoreUnit_S2(implicit p: Parameters) extends XSModule with HasCSRConst{
   val io = IO(new Bundle() {
     val in = Flipped(Decoupled(new LsPipelineBundle))
     val pmpResp = Flipped(new PMPRespBundle)
     val static_pm = Input(Valid(Bool()))
     val out = Decoupled(new LsPipelineBundle)
-    val fdiResp = Flipped(new FDIRespBundle)
+    val dasicsResp = Flipped(new DasicsRespBundle)
   })
   val EnableMem = io.in.bits.uop.loadStoreEnable
   val pmp = WireInit(io.pmpResp)
@@ -192,8 +199,12 @@ class StoreUnit_S2(implicit p: Parameters) extends XSModule {
   io.out.bits.uop.cf.exceptionVec(storeAccessFault) := (io.in.bits.uop.cf.exceptionVec(storeAccessFault) || pmp.st) && EnableMem
   io.out.valid := io.in.valid && (!is_mmio || s2_exception)
 
-  //FDI store access fault
-  io.out.bits.uop.cf.exceptionVec(fdiUStoreAccessFault) := io.fdiResp.fdi_fault === FDICheckFault.UWriteFDIFault
+  //Dasics store access fault
+  when (io.dasicsResp.dasics_fault > io.in.bits.uop.cf.dasicsFaultReason) { // DasicsFaultReason.StoreDasicsFault
+    io.out.bits.uop.cf.exceptionVec(dasicsUCheckFault) := io.in.bits.uop.cf.exceptionVec(dasicsUCheckFault) || io.dasicsResp.mode === ModeU
+    io.out.bits.uop.cf.exceptionVec(dasicsSCheckFault) := io.in.bits.uop.cf.exceptionVec(dasicsSCheckFault) || io.dasicsResp.mode === ModeS
+    io.out.bits.uop.cf.dasicsFaultReason := io.dasicsResp.dasics_fault
+  }
 }
 
 class StoreUnit_S3(implicit p: Parameters) extends XSModule {
@@ -233,9 +244,9 @@ class StoreUnit(implicit p: Parameters) extends XSModule with HasPerfLogging {
     val stout = DecoupledIO(new ExuOutput) // writeback store
     // store mask, send to sq in store_s0
     val storeMaskOut = Valid(new StoreMaskBundle)
-    //FDI
-    val fdiReq = ValidIO(new FDIReqBundle())
-    val fdiResp = Flipped(new FDIRespBundle())
+    //Dasics
+    val dasicsReq = ValidIO(new DasicsReqBundle())
+    val dasicsResp = Flipped(new DasicsRespBundle())
   })
   io.tlb := DontCare
   val store_s0 = Module(new StoreUnit_S0)
@@ -250,8 +261,8 @@ class StoreUnit(implicit p: Parameters) extends XSModule with HasPerfLogging {
   store_s0.io.isFirstIssue := io.isFirstIssue
   store_s0.io.vmEnable := io.vmEnable
 
-  io.fdiReq := store_s1.io.fdiReq
-  store_s2.io.fdiResp := io.fdiResp
+  io.dasicsReq := store_s1.io.dasicsReq
+  store_s2.io.dasicsResp := io.dasicsResp
 
   io.storeMaskOut.valid := store_s0.io.in.valid
   io.storeMaskOut.bits.mask := store_s0.io.out.bits.mask

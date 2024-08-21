@@ -89,7 +89,9 @@ trait HasTlbConst extends HasXSParameter {
   val vpnnLen = 9
   val vpnLen  = VAddrBits - offLen
   val flagLen = 8
-  val pteResLen = XLEN - ppnLen - 2 - flagLen
+  val pkeyLen = 5
+  val paddingLen = 44 - ppnLen  // Pad ppnLen to 44 for sv39
+  val pteResLen = XLEN - paddingLen - ppnLen - 2 - flagLen - pkeyLen
 
   val sramSinglePort = true
 
