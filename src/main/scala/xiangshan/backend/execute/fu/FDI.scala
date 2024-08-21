@@ -34,7 +34,7 @@ object FDIOp{
 
 object FDICheckFault {
     def noFDIFault     = "b00".U
-    def UReadDascisFault  = "b01".U
+    def UReadFDIFault  = "b01".U
     def UWriteFDIFault = "b10".U
     def UJumpFDIFault  = "b11".U
 
@@ -304,7 +304,7 @@ class MemFDI(implicit p: Parameters) extends XSModule with FDIMethod with HasCSR
   mainCfg.gen(fdi_umain_cfg)
 
   val fdi_config_mapping = Map(
-    MaskedRegMap(Fdiumaincfg, fdi_umain_cfg, "h2".U(XLEN.W))
+    MaskedRegMap(FDIUMainCfg, fdi_umain_cfg, "h2".U(XLEN.W))
   )
 
   val rdata: UInt = Wire(UInt(XLEN.W))
@@ -335,11 +335,11 @@ class JumpFDI(implicit p: Parameters) extends XSModule
   private val fdi_umain_bound_lo = RegInit(0.U(XLEN.W))
 
   val control_flow_mapping = Map(
-    MaskedRegMap(Fdimaincall, fdi_main_call),
-    MaskedRegMap(Fdireturnpc, fdi_return_pc),
-    MaskedRegMap(Fdiumaincfg, fdi_umain_cfg, "h2".U(XLEN.W)),
-    MaskedRegMap(Fdiumainboundlo, fdi_umain_bound_lo),
-    MaskedRegMap(Fdiumainboundhi, fdi_umain_bound_hi)
+    MaskedRegMap(FDIMainCall, fdi_main_call),
+    MaskedRegMap(FDIReturnPc, fdi_return_pc),
+    MaskedRegMap(FDIUMainCfg, fdi_umain_cfg, "h2".U(XLEN.W)),
+    MaskedRegMap(FDIUMainBoundLo, fdi_umain_bound_lo),
+    MaskedRegMap(FDIUMainBoundHi, fdi_umain_bound_hi)
   )
 
   val rdata: UInt = Wire(UInt(XLEN.W))
@@ -424,7 +424,7 @@ class FDIMemChecker(implicit p: Parameters) extends XSModule
   io.resp.fdi_fault := FDICheckFault.noFDIFault 
 
   when(fdi_req_read && fdi_mem_fault && io.enableFDI){
-    io.resp.fdi_fault := FDICheckFault.UReadDascisFault
+    io.resp.fdi_fault := FDICheckFault.UReadFDIFault
   }.elsewhen(fdi_req_write && fdi_mem_fault && io.enableFDI){
     io.resp.fdi_fault := FDICheckFault.UWriteFDIFault
   }    
@@ -552,9 +552,9 @@ class FDITagger(implicit p: Parameters) extends XSModule with HasCSRConst {
 
   val w = io.distribute_csr.w
   val mapping: Map[Int, (UInt, UInt, UInt => UInt, UInt, UInt => UInt)] = Map(
-    MaskedRegMap(Fdiumaincfg, mainCfgReg, "h2".U(XLEN.W)),
-    MaskedRegMap(Fdiumainboundlo, fdi_umain_bound_lo),
-    MaskedRegMap(Fdiumainboundhi, fdi_umain_bound_hi)
+    MaskedRegMap(FDIUMainCfg, mainCfgReg, "h2".U(XLEN.W)),
+    MaskedRegMap(FDIUMainBoundLo, fdi_umain_bound_lo),
+    MaskedRegMap(FDIUMainBoundHi, fdi_umain_bound_hi)
   )
   val rdata: UInt = Wire(UInt(XLEN.W))
   MaskedRegMap.generate(mapping, w.bits.addr, rdata, w.valid, w.bits.data)
