@@ -166,8 +166,8 @@ package object xiangshan {
   }
 
   object ExceptionVec {
-    // 16 RV exception + 3 FDI excepiton
-    def apply() = Vec(16 + 3, Bool())
+    // 16 RV exception + 2 Dasics exception
+    def apply() = Vec(16 + 2, Bool())
   }
 
   object PMAMode {
@@ -300,11 +300,13 @@ package object xiangshan {
     def IMM_Z  = "b0101".U
     def INVALID_INSTR = "b0110".U
     def IMM_B6 = "b1000".U
-
+    
     //vector
     def IMM_VA = "b1001".U
     def IMM_C = "b1100".U
     def IMM_CI = "b1101".U
+
+    def IMM_DIJ = "b1010".U
 
     def X      = BitPat("b????")
 
@@ -329,17 +331,26 @@ package object xiangshan {
     def storePageFault      = 15
 
     //exception 16-23 is reserve
+    def DasicsExcOffset = 8
+    //  Dasics excetption       number    offset
+    def dasicsUCheckFault = 24 - DasicsExcOffset
+    def dasicsSCheckFault = 25 - DasicsExcOffset
+    
+    // def dasicsUJumpFault = 24 - DasicsExcOffset
+    // def dasicsSJumpFault = 25 - DasicsExcOffset
+    // def dasicsULoadAccessFault = 26 - DasicsExcOffset
+    // def dasicsSLoadAccessFault = 27 - DasicsExcOffset
+    // def dasicsUStoreAccessFault = 28 - DasicsExcOffset
+    // def dasicsSStoreAccessFault = 29 - DasicsExcOffset
+    // def dasicsUEcallAccessFault = 30 - DasicsExcOffset
+    // def dasicsSEcallAccessFault = 31 - DasicsExcOffset
+    // def pkuLoadPageFault    = 32 - DasicsExcOffset
+    // def pkuStorePageFault   = 33 - DasicsExcOffset
+    // def pksLoadPageFault    = 34 - DasicsExcOffset
+    // def pksStorePageFault   = 35 - DasicsExcOffset
 
-    def FDIExcOffset = 8
-    //  FDI excetption       number    offset
-    def fdiUJumpFault = 24 - FDIExcOffset
-    def fdiULoadAccessFault = 25 - FDIExcOffset
-    def fdiUStoreAccessFault = 26 - FDIExcOffset
-
-
-    def priorities = Seq(
-      // FDI Instruction fault actually belongs to the last branch instr
-      fdiUJumpFault,
+    def prioritiesALL = Seq(
+      // Dasics Instruction fault actually belongs to the last branch instr
       breakPoint, // TODO: different BP has different priority
       instrPageFault,
       instrAccessFault,
@@ -352,20 +363,36 @@ package object xiangshan {
       loadPageFault,
       storeAccessFault,
       loadAccessFault,
-      fdiULoadAccessFault,
-      fdiUStoreAccessFault
+      dasicsSCheckFault,
+      dasicsUCheckFault
     )
-    def all = priorities.distinct.sorted
+    def prioritiesRegular = Seq(
+      // Dasics Instruction fault actually belongs to the last branch instr
+      breakPoint, // TODO: different BP has different priority
+      instrPageFault,
+      instrAccessFault,
+      illegalInstr,
+      instrAddrMisaligned,
+      ecallM, ecallS, ecallU,
+      storeAddrMisaligned,
+      loadAddrMisaligned,
+      storePageFault,
+      loadPageFault,
+      storeAccessFault,
+      loadAccessFault
+    )
+    def all = prioritiesALL.distinct.sorted
     def frontendSet = Seq(
       instrAddrMisaligned,
       instrAccessFault,
       illegalInstr,
-      instrPageFault
+      instrPageFault,
+      dasicsSCheckFault,
+      dasicsUCheckFault
     )
-    def fdiSet = Seq(
-      fdiUJumpFault,
-      fdiULoadAccessFault,
-      fdiUStoreAccessFault
+    def dasicsSet = Seq(
+      dasicsSCheckFault,
+      dasicsUCheckFault
     )
     def partialSelect(vec: Vec[Bool], select: Seq[Int]): Vec[Bool] = {
       val new_vec = Wire(ExceptionVec())
@@ -373,7 +400,7 @@ package object xiangshan {
       select.foreach(i => new_vec(i) := vec(i))
       new_vec
     }
-    def selectFDI(vec:Vec[Bool]): Vec[Bool] = partialSelect(vec, fdiSet)
+    def selectDasics(vec:Vec[Bool]): Vec[Bool] = partialSelect(vec, dasicsSet)
     def selectFrontend(vec: Vec[Bool]): Vec[Bool] = partialSelect(vec, frontendSet)
     def selectAll(vec: Vec[Bool]): Vec[Bool] = partialSelect(vec, ExceptionNO.all)
     def selectByFu(vec:Vec[Bool], fuConfig: FuConfig): Vec[Bool] =

@@ -52,18 +52,38 @@ trait HasCSRConst {
   val Hpmcounter30  = 0xC1E
   val Hpmcounter31  = 0xC1F
 
-  // User FDI registers
-  val FDILibCfgBase = 0x880
-  val FDILibBoundBase = 0x890
+  // User Trap Setup
+  val Ustatus       = 0x000
+  val Uie           = 0x004
+  val Utvec         = 0x005
 
-  val Fdimaincall  = 0x8b0
-  val Fdireturnpc  = 0x8b1
+  // User Trap Handling
+  val Uscratch      = 0x040
+  val Uepc          = 0x041
+  val Ucause        = 0x042
+  val Utval         = 0x043
+  val Uip           = 0x044
 
-  val FDIJmpCfgBase = 0x8c8
-  val FDIJmpBoundBase = 0x8c0
+  val Utimer        = 0x045
+
+  // User Dasics registers
+  val DasicsLibCfgBase = 0x880
+  val DasicsLibBoundBase = 0x890
+
+  val DasicsMainCall  = 0x8b0
+  val DasicsReturnPc  = 0x8b1
+  val DasicsActiveZoneReturnPc = 0x8b2
+  val DasicsFReason   = 0x8b3
+  
+  val DasicsJmpCfgBase = 0x8c8
+  val DasicsJmpBoundBase = 0x8c0
+  // User-Level MPK Register
+  val Upkru         = 0x800
 
   // Supervisor Trap Setup
   val Sstatus       = 0x100
+  val Sedeleg       = 0x102
+  val Sideleg       = 0x103
   val Sie           = 0x104
   val Stvec         = 0x105
   val Scounteren    = 0x106
@@ -87,15 +107,21 @@ trait HasCSRConst {
   /** 0x5C5-0x5D9 for cache instruction register*/
   val Scachebase    = 0x5C5
 
+  // Supervisor MPK Registers
+  val Spkctl        = 0x9c0
+  val Spkrs         = 0x9c1
+
+  /** 0x5C5-0x5E5 for cache instruction register*/
+
   val Sdsid         = 0x9C0
   val Sfetchctl     = 0x9E0
 
-  // Supervisor FDI Settings (for User protection)
-  val Fdiumaincfg = 0x9E0
-  val Fdiumainboundlo = 0x9E2
-  val Fdiumainboundhi = 0x9E3
-  
-  // SPMP
+  // Supervisor Dasics Settings (for User protection)
+  val DasicsUMainCfg = 0x9E0
+  val DasicsUMainBoundLo = 0x9E2
+  val DasicsUMainBoundHi = 0x9E3
+    
+    // SPMP
   val SpmpSwitch    = 0x19F
   val SpmpcfgBase   = 0x1A0
   val SpmpaddrBase  = 0x1B0
@@ -197,6 +223,11 @@ trait HasCSRConst {
   val Mhpmevent29   = 0x33D
   val Mhpmevent30   = 0x33E
   val Mhpmevent31   = 0x33F
+
+  // Machine DASICS Settings (for Supervisor protection)
+  val DasicsSMainCfg = 0xBC0
+  val DasicsSMainBoundLo = 0xBC2
+  val DasicsSMainBoundHi = 0xBC3
 
   // Debug/Trace Registers (shared with Debug Mode) (not implemented)
 

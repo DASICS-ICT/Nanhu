@@ -25,9 +25,12 @@ import chisel3.util._
 import xiangshan.backend.execute.exu.ExuType
 import freechips.rocketchip.diplomacy._
 import xiangshan.{ExuOutput, HasXSParameter, MemPredUpdateReq, Redirect, XSCoreParamsKey}
+import xiangshan.ExceptionNO.{dasicsUCheckFault, dasicsSCheckFault}
 import xiangshan.frontend.Ftq_RF_Components
 import difftest._
 import xs.utils.GTimer
+import xiangshan.backend.execute.fu.DasicsFaultReason
+
 
 class WriteBackNetwork(implicit p:Parameters) extends LazyModule {
   val node = new WriteBackNetworkNode
@@ -65,6 +68,25 @@ class WriteBackNetworkImp(outer:WriteBackNetwork)(implicit p:Parameters) extends
     val validCond = realIn.valid && !realIn.bits.uop.robIdx.needFlush(localRedirectReg)
     res.valid := RegNext(validCond, false.B)
     res.bits := RegEnable(realIn.bits, realIn.valid)
+    res.bits.redirectValid := RegNext(realIn.bits.redirectValid && !realIn.bits.redirect.robIdx.needFlush(localRedirectReg), false.B)
+    res.bits.redirect := RegEnable(realIn.bits.redirect, realIn.bits.redirectValid)
+    res
+  }
+  
+  private def PipeWithRedirectDelayDasics(in: Valid[ExuOutput], latency: Int, p: Parameters): Valid[ExuOutput] = {
+    require(latency > 0)
+    val res = Wire(Valid(new ExuOutput()(p)))
+    val realIn = if (latency == 1) in else PipeWithRedirectDelayDasics(in, latency - 1, p)
+    val validCond = realIn.valid && !realIn.bits.uop.robIdx.needFlush(localRedirectReg)
+    res.valid := RegNext(validCond, false.B)
+    res.bits := RegEnable(realIn.bits, realIn.valid)
+    if (latency == 1){
+        when (realIn.bits.uop.cf.dasicsFaultReason === DasicsFaultReason.JumpDasicsFault) {
+          res.bits.uop.cf.exceptionVec(dasicsSCheckFault) := realIn.bits.uop.cf.exceptionVec(dasicsSCheckFault)
+          res.bits.uop.cf.exceptionVec(dasicsUCheckFault) := realIn.bits.uop.cf.exceptionVec(dasicsUCheckFault)
+          res.bits.uop.cf.dasicsFaultReason := realIn.bits.uop.cf.dasicsFaultReason
+      }
+    }
     res.bits.redirectValid := RegNext(realIn.bits.redirectValid && !realIn.bits.redirect.robIdx.needFlush(localRedirectReg), false.B)
     res.bits.redirect := RegEnable(realIn.bits.redirect, realIn.bits.redirectValid)
     res
@@ -114,7 +136,11 @@ class WriteBackNetworkImp(outer:WriteBackNetwork)(implicit p:Parameters) extends
       }
       realSrc.bits.uop.debugInfo.writebackTime := timer
       if (s._2._1.isRob || s._2._1.isVrs || s._2._1.isVprs || s._2._1.isVms || s._2._1.isMemRs && cfg.throughVectorRf) {
-        dst := PipeWithRedirect(realSrc, 2, p)
+        if(cfg.exuType == ExuType.jmp){
+          dst := PipeWithRedirectDelayDasics(realSrc, 2, p)
+        } else {
+          dst := PipeWithRedirect(realSrc, 2, p)
+        }
       } else if (s._2._1.isIntRs) {
         if (cfg.isIntType || cfg.isMemType || cfg.isVecType) {
           dst := Pipe(realSrc)

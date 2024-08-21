@@ -190,6 +190,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   csrioIn.externalInterrupt.mtip := outer.clint_int_sink.in.head._1(1)
   csrioIn.externalInterrupt.meip := outer.plic_int_sink.in.head._1(0)
   csrioIn.externalInterrupt.seip := outer.plic_int_sink.in.last._1(0)
+  csrioIn.externalInterrupt.ueip := 0.U
   csrioIn.externalInterrupt.debug := outer.debug_int_sink.in.head._1(0)
 
   csrioIn.distributedUpdate(0) := exuBlock.io.memBlk_csrUpdate

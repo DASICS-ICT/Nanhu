@@ -40,8 +40,10 @@ import xiangshan.frontend.AllAheadFoldedHistoryOldestBits
 import xs.utils.DataChanged
 import xiangshan.vector._
 import xiangshan.vector.writeback.VmbPtr
-
+import xiangshan.backend.execute.fu.DasicsFaultReason
 import scala.math.max
+import xiangshan.backend.execute.fu.DasicsConst
+import xiangshan.backend.execute.fu.csr.HasCSRConst
 
 class ValidUndirectioned[T <: Data](gen: T) extends Bundle {
   val valid = Bool()
@@ -97,7 +99,7 @@ class CfiUpdateInfo(implicit p: Parameters) extends XSBundle with HasBPUParamete
 }
 
 // Dequeue DecodeWidth insts from Ibuffer
-class CtrlFlow(implicit p: Parameters) extends XSBundle {
+class CtrlFlow(implicit p: Parameters) extends XSBundle with DasicsConst {
   val instr = UInt(32.W)
   val pc = UInt(VAddrBits.W)
   val foldpc = UInt(MemPredPCWidth.W)
@@ -117,9 +119,12 @@ class CtrlFlow(implicit p: Parameters) extends XSBundle {
   val ssid = UInt(SSIDWidth.W)
   val ftqPtr = new FtqPtr
   val ftqOffset = UInt(log2Up(PredictWidth).W)
-  // needs to be checked by FDI
-  val fdiUntrusted = Bool()
-
+  // needs to be checked by Dasics
+  val dasicsUntrusted = Bool()
+  // Dasics Exception Reason
+  val dasicsFaultReason = UInt(DasicsFaultWidth.W) 
+  // info of branch fault by last branch
+  val lastBranch = ValidUndirectioned(UInt(VAddrBits.W))
   //vector
 
 }
@@ -179,7 +184,7 @@ class CtrlSignals(implicit p: Parameters) extends XSBundle {
 
 }
 
-class CfCtrl(implicit p: Parameters) extends XSBundle {
+class CfCtrl(implicit p: Parameters) extends XSBundle{
   val cf = new CtrlFlow
   val ctrl = new CtrlSignals
   val vCsrInfo = new VICsrInfo
@@ -206,7 +211,7 @@ class LSIdx(implicit p: Parameters) extends XSBundle {
 }
 
 // CfCtrl -> MicroOp at Rename Stage
-class MicroOp(implicit p: Parameters) extends CfCtrl {
+class MicroOp(implicit p: Parameters) extends CfCtrl{
   val srcState = Vec(3, SrcState())
   val psrc = Vec(3, UInt(PhyRegIdxWidth.W))
   val pdest = UInt(PhyRegIdxWidth.W)
@@ -231,9 +236,6 @@ class MicroOp(implicit p: Parameters) extends CfCtrl {
   val vtypeRegIdx = UInt(log2Ceil(VIVtypeRegsNum).W)
   val segIdx = UInt(log2Ceil(VLEN).W)
   val elmIdx = UInt(3.W)
-
-  //FDI
-  val fdiUntrusted = Bool()
 
   def clearExceptions(
     exceptionBits: Seq[Int] = Seq(),
@@ -316,6 +318,7 @@ class ExternalInterruptIO(implicit p: Parameters) extends XSBundle {
   val msip = Input(Bool())
   val meip = Input(Bool())
   val seip = Input(Bool())
+  val ueip = Input(Bool())
   val debug = Input(Bool())
 }
 
@@ -433,10 +436,15 @@ class TlbCsrBundle(implicit p: Parameters) extends XSBundle {
     val imode = UInt(2.W)
     val dmode = UInt(2.W)
   }
+  val mpk = new Bundle {
+    val pkr = UInt(XLEN.W)
+    val enable = Bool()
+  }
 
   override def toPrintable: Printable = {
     p"Satp mode:0x${Hexadecimal(satp.mode)} asid:0x${Hexadecimal(satp.asid)} ppn:0x${Hexadecimal(satp.ppn)} " +
-      p"Priv mxr:${priv.mxr} sum:${priv.sum} imode:${priv.imode} dmode:${priv.dmode}"
+      p"Priv mxr:${priv.mxr} sum:${priv.sum} imode:${priv.imode} dmode:${priv.dmode} " +
+      p"MPK enable:${mpk.enable} pkr:0x${Hexadecimal(mpk.pkr)}"
   }
 }
 
@@ -520,6 +528,7 @@ class CustomCSRCtrlIO(implicit p: Parameters) extends XSBundle {
 
   // distribute csr write signal
   val distribute_csr = new DistributedCSRIO()
+
   // TODO: move it to a new bundle, since single step is not a custom control signal
   val singlestep = Output(Bool())
   val frontend_trigger = new FrontendTdataDistributeIO()
@@ -533,6 +542,8 @@ class CustomCSRCtrlIO(implicit p: Parameters) extends XSBundle {
   }
   // SPMP
   val spmp_enable = Output(Bool())
+  // Dasics
+  val dasics_enable  = Output(Bool())
 }
 
 class DistributedCSRIO(implicit p: Parameters) extends XSBundle {

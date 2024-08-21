@@ -100,7 +100,7 @@ object FuConfigs{
     latency = 0,
     trigger = false,
     hasRedirect = true,
-    exceptionOut = Seq(illegalInstr, fdiUJumpFault)
+    exceptionOut = Seq(illegalInstr, dasicsUCheckFault, dasicsSCheckFault)
   )
   val fenceCfg = FuConfig(
     name = "fence",
@@ -132,7 +132,7 @@ object FuConfigs{
     latency = 0,
     hasRedirect = true,
     trigger = false,
-    exceptionOut = Seq(illegalInstr, breakPoint, ecallU, ecallS, ecallM)
+    exceptionOut = Seq(illegalInstr, breakPoint, ecallU, ecallS, ecallM, dasicsUCheckFault, dasicsSCheckFault)
   )
   val i2fCfg = FuConfig(
     name = "i2f",
@@ -227,7 +227,7 @@ object FuConfigs{
     latency = Int.MaxValue,
     hasRedirect = true,
     trigger = true,
-    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, fdiULoadAccessFault),
+    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, dasicsUCheckFault, dasicsSCheckFault),
     triggerVrfWakeup = true
   )
 
@@ -245,7 +245,7 @@ object FuConfigs{
     latency = Int.MaxValue,
     hasRedirect = true,
     trigger = true,
-    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, fdiULoadAccessFault),
+    exceptionOut = Seq(loadAddrMisaligned, loadAccessFault, loadPageFault, dasicsUCheckFault, dasicsSCheckFault),
   )
 
   val staCfg = FuConfig(
@@ -262,7 +262,7 @@ object FuConfigs{
     latency = Int.MaxValue,
     hasRedirect = true,
     trigger = true,
-    exceptionOut = Seq(storeAddrMisaligned, storeAccessFault, storePageFault, fdiUStoreAccessFault)
+    exceptionOut = Seq(storeAddrMisaligned, storeAccessFault, storePageFault, dasicsUCheckFault, dasicsSCheckFault)
   )
 
   val stdCfg = FuConfig(

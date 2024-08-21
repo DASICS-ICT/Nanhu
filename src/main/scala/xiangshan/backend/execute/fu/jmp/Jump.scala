@@ -20,9 +20,8 @@ import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
 import xiangshan.backend.decode.ImmUnion
-import xiangshan.backend.execute.fu.{FDICheckFault, FDIJumpChecker, FDIOp, FUWithRedirect, JumpFDI}
+import xiangshan.backend.execute.fu.{FUWithRedirect}
 import xiangshan.{FuOpType, RedirectLevel, XSModule}
-import xiangshan.ExceptionNO.{fdiUJumpFault, illegalInstr}
 import xiangshan._
 import xs.utils.{ParallelMux, SignExt}
 
@@ -40,11 +39,13 @@ class JumpDataModule(implicit p: Parameters) extends XSModule {
 
   val isJalr = JumpOpType.jumpOpIsJalr(func)
   val isAuipc = JumpOpType.jumpOpIsAuipc(func)
-  val isFDICall = JumpOpType.jumpOpIsFDIcall(func)
+  val isDasicsCallJ = JumpOpType.jumpOpIsDasicscallJ(func)
+  val isDasicsCallJR = JumpOpType.jumpOpIsDasicscallJR(func)
   val offset = SignExt(ParallelMux(Seq(
-    (isJalr || isFDICall) -> ImmUnion.I.toImm32(immMin),
+    (isJalr || isDasicsCallJR) -> ImmUnion.I.toImm32(immMin),
     isAuipc -> ImmUnion.U.toImm32(immMin),
-    !(isJalr || isAuipc || isFDICall) -> ImmUnion.J.toImm32(immMin)
+    isDasicsCallJ -> ImmUnion.DIJ.toImm32(immMin),
+    !(isJalr || isAuipc || isDasicsCallJ || isDasicsCallJR) -> ImmUnion.J.toImm32(immMin)
   )), XLEN)
 
   val snpc = Mux(isRVC, pc + 2.U, pc + 4.U)
@@ -60,7 +61,6 @@ class JumpDataModule(implicit p: Parameters) extends XSModule {
 
 class Jump(implicit p: Parameters) extends FUWithRedirect {
   val prefetchI: Valid[UInt] = IO(Output(Valid(UInt(XLEN.W))))
-  val fdicallDistributedCSR = IO(Input(new DistributedCSRIO()))
 
   private val (src1, jalr_target, pc, immMin, func, uop) = (
     io.in.bits.src(0),
@@ -75,7 +75,6 @@ class Jump(implicit p: Parameters) extends FUWithRedirect {
   private val valid = io.in.valid
   private val isRVC = uop.cf.pd.isRVC
   private val isPrefetchI = JumpOpType.jumpOpIsPrefetch_I(io.in.bits.uop.ctrl.fuOpType)
-  private val isUntrusted = io.in.bits.uop.cf.fdiUntrusted
 
   private val jumpDataModule = Module(new JumpDataModule)
   jumpDataModule.io.src := src1
@@ -107,15 +106,4 @@ class Jump(implicit p: Parameters) extends FUWithRedirect {
   io.out.valid := valid
   io.out.bits.uop := io.in.bits.uop
   io.out.bits.data := jumpDataModule.io.result
-
-  // FDI jump modules
-  val fdi = Module(new JumpFDI)
-  fdi.io.distribute_csr  := fdicallDistributedCSR.delay()
-
-  val fdiJumpChecker = Module(new FDIJumpChecker)
-  fdiJumpChecker.io.req.valid := io.in.valid && (JumpOpType.jumpOpIsJal(func) || JumpOpType.jumpOpIsJalr(func))  //only check jump (jal/jalr) instruction
-  fdiJumpChecker.io.connect(pc, redirectOut.cfiUpdate.target, isUntrusted, FDIOp.jump, fdi.io.control_flow)
-
-  io.out.bits.uop.cf.exceptionVec(illegalInstr) := valid && JumpOpType.jumpOpIsFDIcall(func) && isUntrusted
-  io.out.bits.uop.cf.exceptionVec(fdiUJumpFault) := fdiJumpChecker.io.resp.fdi_fault === FDICheckFault.UJumpFDIFault
 }

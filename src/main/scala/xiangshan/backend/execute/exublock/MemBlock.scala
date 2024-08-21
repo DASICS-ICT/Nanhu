@@ -496,23 +496,32 @@ class MemBlockImp(outer: MemBlock) extends BasicExuBlockImp(outer)
     dtlb_ld.foreach(_.ptw.resp.valid := ptw_resp_v && Cat(ptw_resp_next.vector.take(ld_tlb_ports)).orR)
     dtlb_st.foreach(_.ptw.resp.valid := ptw_resp_v && Cat(ptw_resp_next.vector.drop(ld_tlb_ports)).orR)
   }
+  
+  val memDasicsReq  = storeUnits.map(_.io.dasicsReq) ++ loadUnits.map(_.io.dasicsReq)
+  val memDasicsResp = storeUnits.map(_.io.dasicsResp) ++ loadUnits.map(_.io.dasicsResp)
 
-  // fdi memory access check
-  val fdi = Module(new MemFDI())
-  fdi.io.distribute_csr <> csrCtrl.distribute_csr
-
-  private val fdiCheckers = Seq.fill(exuParameters.LduCnt + exuParameters.StuCnt)(Module(new FDIMemChecker()))
-  private val fdiCheckersIOs = fdiCheckers.map(_.io)
-
-  val memFDIReq  = storeUnits.map(_.io.fdiReq) ++ loadUnits.map(_.io.fdiReq)
-  val memFDIResp = storeUnits.map(_.io.fdiResp) ++ loadUnits.map(_.io.fdiResp)
-
-  for( (dchecker,index) <- fdiCheckersIOs.zipWithIndex){
-     dchecker.resource := fdi.io.entries
-     dchecker.req := memFDIReq(index)
-     memFDIResp(index) := dchecker.resp
+  memDasicsResp.map{resp =>
+    resp.mode := tlbcsr_dup.last.priv.dmode
+    resp.dasics_fault := DasicsFaultReason.noDasicsFault
   }
 
+  if(HasDasics){
+    // dasics memory access check
+    val dasics = Module(new MemDasics())
+    dasics.io.distribute_csr <> csrCtrl.distribute_csr
+  
+    val dasics_checkers = VecInit(Seq.fill(exuParameters.LduCnt + exuParameters.StuCnt)(
+      Module(new DasicsMemChecker()).io
+    )) //TODO: general Dasics check port config
+
+    for( (dchecker,index) <- dasics_checkers.zipWithIndex){
+      dchecker.mode := tlbcsr_dup.last.priv.dmode
+      dchecker.resource := dasics.io.entries
+      dchecker.mainCfg  := dasics.io.mainCfg
+      dchecker.req := memDasicsReq(index)
+      memDasicsResp(index) := dchecker.resp
+    }
+  }
   // pmp
   val pmp = Module(new PMP())
   pmp.io.distribute_csr <> csrCtrl.distribute_csr
