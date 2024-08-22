@@ -52,6 +52,18 @@ trait HasCSRConst {
   val Hpmcounter30  = 0xC1E
   val Hpmcounter31  = 0xC1F
 
+  // User Trap Setup
+  val Ustatus       = 0x000
+  val Uie           = 0x004
+  val Utvec         = 0x005
+
+  // User Trap Handling
+  val Uscratch      = 0x040
+  val Uepc          = 0x041
+  val Ucause        = 0x042
+  val Utval         = 0x043
+  val Uip           = 0x044
+
   // User FDI registers
   val FDILibCfgBase = 0x880
   val FDILibBoundBase = 0x890
@@ -65,6 +77,8 @@ trait HasCSRConst {
 
   // Supervisor Trap Setup
   val Sstatus       = 0x100
+  val Sedeleg       = 0x102
+  val Sideleg       = 0x103
   val Sie           = 0x104
   val Stvec         = 0x105
   val Scounteren    = 0x106

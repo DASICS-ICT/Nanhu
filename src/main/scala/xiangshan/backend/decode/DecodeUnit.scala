@@ -394,7 +394,16 @@ object BDecode extends DecodeConstants{
   */
 object FDIDecode extends DecodeConstants {
   val table: Array[(BitPat, List[BitPat])] = Array(
-    FDICALL_JR-> List(SrcType.reg,  SrcType.imm, SrcType.X,   FuType.jmp, JumpOpType.fdicall_jr,  Y, N, N, N, Y, Y, N, N, VstartType.hold, SelImm.IMM_I)
+    FDICALL_JR-> List(SrcType.reg,  SrcType.imm, SrcType.DC, FuType.jmp, JumpOpType.fdicall_jr,  Y, N, N, N, Y, Y, N, N, VstartType.hold, SelImm.IMM_I)
+  )
+}
+
+/**
+  * N extension (user-level interrupts) Decode constants
+  */
+object NDecode extends DecodeConstants {
+  val table: Array[(BitPat, List[BitPat])] = Array(
+    URET -> List(SrcType.reg, SrcType.imm, SrcType.DC, FuType.csr, CSROpType.jmp, Y, N, N, N, Y, Y, N, N, VstartType.hold, SelImm.IMM_I),
   )
 }
 
@@ -1044,6 +1053,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     XSTrapDecode.table ++
     BDecode.table ++
     CBODecode.table ++
+    NDecode.table ++
     VectorConfDecode.table ++
     vdecode_table ++
     FDIDecode.table
