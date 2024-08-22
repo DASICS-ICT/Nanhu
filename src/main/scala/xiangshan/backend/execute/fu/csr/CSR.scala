@@ -269,6 +269,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   var extList = List('a', 's', 'i', 'u')
   if (HasMExtension) { extList = extList :+ 'm' }
   if (HasCExtension) { extList = extList :+ 'c' }
+  if (HasNExtension) { extList = extList :+ 'n' }
   if (HasFPU) { extList = extList ++ List('f', 'd') }
   if (hasVector) { extList = extList :+ 'v' }
   val misaInitVal = getMisaMxl(2) | extList.foldLeft(0L)((sum, i) => sum | getMisaExt(i)) //"h8000000000141105".U
@@ -323,17 +324,13 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     GenMask(31, 23)       | // WPRI
     GenMask(16, 15)       | // XS is read-only
     GenMask(6)            | // WPRI
-    GenMask(4)            | // WPRI
-    GenMask(2)            | // WPRI
-    GenMask(0)              // WPRI
+    GenMask(2)              // WPRI
   ), 64)).asUInt
   val mstatusMask = (~ZeroExt((
     GenMask(XLEN - 2, 36) | // WPRI
     GenMask(31, 23)       | // WPRI
     GenMask(6)            | // WPRI
-    GenMask(4)            | // WPRI
-    GenMask(2)            | // WPRI
-    GenMask(0)              // WPRI
+    GenMask(2)              // WPRI
   ), 64)).asUInt
 
   val medeleg = RegInit(UInt(XLEN.W), 0.U)
@@ -370,7 +367,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   // Superviser-Level CSRs
 
   // val sstatus = RegInit(UInt(XLEN.W), "h00000000".U)
-  val sstatusWmask = "hc6722".U(XLEN.W)
+  val sstatusWmask = "hc6733".U(XLEN.W)
   // Sstatus Write Mask
   // -------------------------------------------------------
   //    19           9   5     2
@@ -383,10 +380,15 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val stvecMask = ~(0x2.U(XLEN.W))
   val stvec = RegInit(UInt(XLEN.W), 0.U)
 
+  val sedeleg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val sideleg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val sedelegWMask: UInt = medeleg
+  val sidelegWMask: UInt = mideleg
+
   // val sie = RegInit(0.U(XLEN.W))
-  val sieMask = "h222".U & mideleg
-  val sipMask = "h222".U & mideleg
-  val sipWMask = "h2".U(XLEN.W) & mideleg // ssip is writeable in smode
+  val sieMask = "h333".U & mideleg
+  val sipMask = "h333".U & mideleg
+  val sipWMask = "h3".U(XLEN.W) & mideleg // ssip/usip is writeable in smode
   val satp = if(EnbaleTlbDebug) RegInit(UInt(XLEN.W), "h8000000000087fbe".U) else RegInit(0.U(XLEN.W))
   // val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U) // only use for tlb naive debug
   // val satpMask = "h80000fffffffffff".U(XLEN.W) // disable asid, mode can only be 8 / 0
@@ -506,7 +508,18 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrio.tlb := tlbBundle
 
   // User-Level CSRs
+  val ustatusWmask: UInt = "h11".U(XLEN.W) // UPIE and UIE
+  val ustatusRmask: UInt = ustatusWmask
+  val uieMask: UInt = "h111".U & sideleg
+  val uipMask: UInt = "h111".U & sideleg
+  val uipWMask: UInt = "h1".U(XLEN.W) // usip is writable in u-mode
+  val uepcMask = (~0x1.U(XLEN.W)).asUInt
   val uepc = Reg(UInt(XLEN.W))
+  val ucause = RegInit(UInt(XLEN.W), 0.U)
+  val uscratch = RegInit(UInt(XLEN.W), 0.U)
+  val utvecMask = (~0x2.U(XLEN.W)).asUInt
+  val utvec = RegInit(UInt(XLEN.W), 0.U)
+  val utval = RegInit(UInt(XLEN.W), 0.U)
 
   // fcsr
   class FcsrStruct extends Bundle {
@@ -713,6 +726,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
     //--- Supervisor Trap Setup ---
     MaskedRegMap(Sstatus, mstatus, sstatusWmask, mstatusUpdateSideEffect, sstatusRmask),
+    MaskedRegMap(Sedeleg, sedeleg, sedelegWMask),
+    MaskedRegMap(Sideleg, sideleg, sidelegWMask),
     MaskedRegMap(Sie, mie, sieMask, MaskedRegMap.NoSideEffect, sieMask),
     MaskedRegMap(Stvec, stvec, stvecMask, MaskedRegMap.NoSideEffect, stvecMask),
     MaskedRegMap(Scounteren, scounteren),
@@ -747,7 +762,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     MaskedRegMap(Mstatus, mstatus, mstatusWMask, mstatusUpdateSideEffect, mstatusMask),
     MaskedRegMap(Misa, misa, 0.U, MaskedRegMap.Unwritable), // now whole misa is unchangeable
     MaskedRegMap(Medeleg, medeleg, "hff00b3ff".U(XLEN.W)),
-    MaskedRegMap(Mideleg, mideleg, "h222".U(XLEN.W)),
+    MaskedRegMap(Mideleg, mideleg, "h333".U(XLEN.W)),
     MaskedRegMap(Mie, mie, "haaa".U(XLEN.W)),
     MaskedRegMap(Mtvec, mtvec, mtvecMask, MaskedRegMap.NoSideEffect, mtvecMask),
     MaskedRegMap(Mcounteren, mcounteren),
@@ -806,6 +821,19 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
       cacheopRegs(name)
     )
   }}
+  private val userMapping = Map(
+    //--- User Trap Setup ---
+    MaskedRegMap(Ustatus, mstatus, ustatusWmask, mstatusUpdateSideEffect, ustatusRmask),
+    MaskedRegMap(Uie, mie, uieMask, MaskedRegMap.Unwritable, uieMask),
+    MaskedRegMap(Utvec, utvec, utvecMask, MaskedRegMap.NoSideEffect, utvecMask),
+
+    // User Trap Handling
+    MaskedRegMap(Uscratch, uscratch),
+    MaskedRegMap(Uepc, uepc, uepcMask, MaskedRegMap.NoSideEffect, uepcMask),
+    MaskedRegMap(Ucause, ucause),
+    MaskedRegMap(Utval, utval),
+    MaskedRegMap(Uip, mip.asUInt, 0.U(XLEN.W), MaskedRegMap.Unwritable, uipMask)
+  )
 
   val mapping = basicPrivMapping ++
                 perfCntMapping ++
@@ -813,9 +841,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
                 pmaMapping ++
                 (if (HasFPU) fcsrMapping else Nil) ++
                 (if (HasCustomCSRCacheOp) cacheopMapping else Nil) ++ 
-                (if(hasVector) vcsrMapping else Nil) ++
-                (if (HasCustomCSRCacheOp) cacheopMapping else Nil) ++
-                (if (HasFDI) fdiMapping else Nil)
+                (if (hasVector) vcsrMapping else Nil) ++
+                (if (HasFDI) fdiMapping else Nil) ++
+                (if (HasNExtension) userMapping else Nil)
 
   println("XiangShan CSR Lists")
 
@@ -871,10 +899,11 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrio.customCtrl.distribute_csr.w.bits.data := wdata
   csrio.customCtrl.distribute_csr.w.bits.addr := addr
 
-  // Fix Mip/Sip write
+  // Fix Mip/Sip/Uip write
   val fixMapping = Map(
     MaskedRegMap(Mip, mipReg.asUInt, mipFixMask),
-    MaskedRegMap(Sip, mipReg.asUInt, sipWMask, MaskedRegMap.NoSideEffect, sipMask)
+    MaskedRegMap(Sip, mipReg.asUInt, sipWMask, MaskedRegMap.NoSideEffect, sipMask),
+    MaskedRegMap(Uip, mipReg.asUInt, uipWMask, MaskedRegMap.NoSideEffect, uipMask)
   )
   val rdataFix = Wire(UInt(XLEN.W))
   val wdataFix = LookupTree(func, List(
@@ -1078,16 +1107,29 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   /**
     * Exception and Intr
     */
-  val ideleg = (mideleg & mip.asUInt)
-  def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
-    ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
+  private val ideleg = (mideleg & mip.asUInt).asBools.zip(sideleg.asBools)
+
+  /**
+    * @param mdeleg mideleg & mip for this interrupt
+    * @param sdeleg sideleg for this interrupt
+    * @return the correct global enable bit (xIE)
+    */
+  def priviledgedEnableDetect(mdeleg: Bool, sdeleg: Bool): Bool = Mux(
+    mdeleg,
+    Mux(sdeleg,
+      (priviledgeMode === ModeU) && mstatusStruct.ie.u,
+      ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS)),
+    ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM)
+  )
 
   val debugIntr = csrio.externalInterrupt.debug & debugIntrEnable
   XSDebug(debugIntr, "Debug Mode: debug interrupt is asserted and valid!")
   // send interrupt information to ROB
   val intrVecEnable = Wire(Vec(12, Bool()))
   val disableInterrupt = debugMode || (dcsrData.step && !dcsrData.stepie)
-  intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y) && !disableInterrupt}
+  intrVecEnable.zip(ideleg).foreach { case(x, (mdeleg, sdeleg)) =>
+    x := priviledgedEnableDetect(mdeleg, sdeleg) && !disableInterrupt
+  }
   val intrVec = Cat(debugIntr && !debugMode, (mie(11,0) & mip.asUInt & intrVecEnable.asUInt))
   val mintrVec = intrVec & (~mideleg(12, 0))
   val mintrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(mintrVec(i), i.U, sum))
@@ -1216,18 +1258,22 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     )
     when (RegNext(priviledgeMode === ModeM)) {
       mtval := tval
-    }.otherwise {
+    }.elsewhen (RegNext(priviledgeMode === ModeS)) {
       stval := tval
+    }.otherwise {
+      utval := tval
     }
   }
 
   val debugTrapTarget = Mux(!isEbreak && debugMode, 0x38020808.U, 0x38020800.U) // 0x808 is when an exception occurs in debug mode prog buf exec
-  val deleg = Mux(hasIntr, mideleg , medeleg)
+  private val delegVecM = Mux(hasIntr, mideleg , medeleg)
+  private val delegVecS = Mux(hasIntr, sideleg, sedeleg)
   // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
-  val delegS = deleg(causeNO(6,0)) && (priviledgeMode < ModeM)
+  private val delegS = delegVecM(causeNO(7,0)) && (priviledgeMode < ModeM)
+  private val delegU = delegVecS(causeNO(7,0)) && (priviledgeMode < ModeS)
   val clearTval = !updateTval || hasIntr
 
-  private val xtvec = Mux(delegS, stvec, mtvec)
+  private val xtvec = Mux(delegS, Mux(delegU, utvec, stvec), mtvec)
   private val xtvecBase = xtvec(VAddrBits - 1, 2)
   // When MODE=Vectored, all synchronous exceptions into M/S mode
   // cause the pc to be set to the address in the BASE field, whereas
@@ -1284,7 +1330,14 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
       debugIntrEnable := false.B
     }.elsewhen (debugMode) {
       //do nothing
-    }.elsewhen (delegS) {
+    }.elsewhen (delegS && delegU) {
+      ucause := causeNO
+      uepc := Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC)
+      mstatusNew.pie.u := mstatusOld.ie.u
+      mstatusNew.ie.u := false.B
+      priviledgeMode := ModeU
+      when (clearTval) { utval := 0.U }
+    }.elsewhen (delegS && !delegU) {
       scause := causeNO
       sepc := Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC)
       mstatusNew.spp := priviledgeMode
@@ -1346,6 +1399,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   when (RegNext(RegNext(reset.asBool) && !reset.asBool)) {
     mepc := Cat(mepc(XLEN - 1, 1), 0.U(1.W))
     sepc := Cat(sepc(XLEN - 1, 1), 0.U(1.W))
+    uepc := Cat(uepc(XLEN - 1, 1), 0.U(1.W))
   }
 
   def readWithScala(addr: Int): UInt = mapping(addr)._1
