@@ -1096,7 +1096,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrExceptionVec(breakPoint) := io.in.valid && isEbreak
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall && !isUntrusted
-  csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall && !isUntrusted
+  csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall && (!isUntrusted || isUntrusted && fdiCfg.closeUEcallFault)
+  csrExceptionVec(fdiUEcallAccessFault) := priviledgeMode === ModeU && io.in.valid && isEcall && isUntrusted && !fdiCfg.closeUEcallFault
 
   // Trigger an illegal instr exception when:
   // * unimplemented csr is being read/written

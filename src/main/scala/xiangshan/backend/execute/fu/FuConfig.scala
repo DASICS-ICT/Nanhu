@@ -132,7 +132,7 @@ object FuConfigs{
     latency = 0,
     hasRedirect = true,
     trigger = false,
-    exceptionOut = Seq(illegalInstr, breakPoint, ecallU, ecallS, ecallM)
+    exceptionOut = Seq(illegalInstr, breakPoint, ecallU, ecallS, ecallM, fdiUEcallAccessFault)
   )
   val i2fCfg = FuConfig(
     name = "i2f",
