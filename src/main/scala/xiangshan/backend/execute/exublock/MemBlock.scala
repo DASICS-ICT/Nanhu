@@ -500,7 +500,7 @@ class MemBlockImp(outer: MemBlock) extends BasicExuBlockImp(outer)
   val memFDIResp = storeUnits.map(_.io.fdiResp) ++ loadUnits.map(_.io.fdiResp)
 
   for( (dchecker,index) <- fdiCheckersIOs.zipWithIndex){
-     dchecker.enableFDI := fdi.io.enableFDI
+     dchecker.mainCfg := fdi.io.mainCfg
      dchecker.resource := fdi.io.entries
      dchecker.req := memFDIReq(index)
      memFDIResp(index) := dchecker.resp
