@@ -11,10 +11,8 @@ import xiangshan.backend.execute.fu.csr.HasCSRConst
 import xs.utils._
 
 trait FDIConst {
-  val NumFDIMemBounds  = 4  // For load/store
-  val NumFullFDIMemBounds  = 16  // For load/store
-  val NumFDIJumpBounds = 1   // For jal/jalr
-  val NumFullFDIJumpBounds  = 4  // For load/store
+  val NumFDIMemBounds  = 16  // For load/store
+  val NumFDIJumpBounds = 4   // For jal/jalr
 
   // 8 bytes of granularity
   val FDIGrain         = 8
@@ -125,14 +123,14 @@ class FDIJumpEntry(implicit p: Parameters) extends XSBundle with FDIConst {
 trait FDIMethod extends FDIConst { this: HasXSParameter =>
   def FDIMemInit(): (Vec[UInt], Vec[UInt]) = {
     val FDIMemCfgPerCSR = XLEN / FDIMemConfig.getWidth //64/4=16
-    val cfgs = WireInit(0.U.asTypeOf(Vec(NumFullFDIMemBounds / FDIMemCfgPerCSR, UInt(XLEN.W))))
+    val cfgs = WireInit(0.U.asTypeOf(Vec(NumFDIMemBounds / FDIMemCfgPerCSR, UInt(XLEN.W))))
     val bounds = WireInit(0.U.asTypeOf(Vec(NumFDIMemBounds * 2, UInt(XLEN.W))))
     (cfgs, bounds)
   }
 
   def FDIJumpInit(): (Vec[UInt], Vec[UInt]) = {
     val FDIJumpCfgPerCSR = 4 
-    val cfgs = WireInit(0.U.asTypeOf(Vec(NumFullFDIJumpBounds / FDIJumpCfgPerCSR, UInt(XLEN.W))))
+    val cfgs = WireInit(0.U.asTypeOf(Vec(NumFDIJumpBounds / FDIJumpCfgPerCSR, UInt(XLEN.W))))
     val bounds = WireInit(0.U.asTypeOf(Vec(NumFDIJumpBounds * 2, UInt(XLEN.W))))
     (cfgs, bounds)
   }
@@ -151,7 +149,7 @@ trait FDIMethod extends FDIConst { this: HasXSParameter =>
 
     // FDIConfigs merged into CSR
     val mem_cfg_merged = RegInit(mem_init_value._1)
-    val mem_cfgs = WireInit(mem_cfg_merged).asTypeOf(Vec(NumFullFDIMemBounds, new FDIMemConfig))
+    val mem_cfgs = WireInit(mem_cfg_merged).asTypeOf(Vec(NumFDIMemBounds, new FDIMemConfig))
     val mem_bounds = RegInit(mem_init_value._2)
 
     // Wire entries to the registers
@@ -194,7 +192,7 @@ trait FDIMethod extends FDIConst { this: HasXSParameter =>
 
     // FDIConfigs merged into CSR
     val jump_cfg_merged = RegInit(jump_init_value._1)
-    val jump_cfgs = WireInit(jump_cfg_merged).asTypeOf(Vec(NumFullFDIJumpBounds, new FDIJumpConfigExt))
+    val jump_cfgs = WireInit(jump_cfg_merged).asTypeOf(Vec(NumFDIJumpBounds, new FDIJumpConfigExt))
     val jump_bounds = RegInit(jump_init_value._2)
 
     // Wire entries to the registers
