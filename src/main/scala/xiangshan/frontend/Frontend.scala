@@ -24,7 +24,7 @@ import xs.utils._
 import xiangshan._
 import xiangshan.backend.execute.fu.csr.PFEvent
 import xiangshan.backend.execute.fu.fence.{FenceIBundle, SfenceBundle}
-import xiangshan.backend.execute.fu.{PMP, PMPChecker, PMPReqBundle, FDITagger}
+import xiangshan.backend.execute.fu.{PMP, PMPChecker, PMPReqBundle, FDITagger, FDIBranchChecker}
 import xiangshan.cache.mmu._
 import xiangshan.frontend.icache._
 import xs.utils.perf.HasPerfLogging
@@ -112,6 +112,16 @@ class FrontendImp (outer: Frontend) extends LazyModuleImp(outer)
   fdiTagger.io.privMode := tlbCsr.priv.imode
   fdiTagger.io.addr := ifu.io.fdi.startAddr
   ifu.io.fdi.notTrusted := fdiTagger.io.notTrusted
+
+  // fdi branch checker
+  val fdiBrChecker: FDIBranchChecker = Module(new FDIBranchChecker())
+  fdiBrChecker.io.distribute_csr := csrCtrl.distribute_csr
+  fdiBrChecker.io.mode := tlbCsr.priv.imode
+  fdiBrChecker.io.valid := ifu.io.fdi.lastBranch.valid
+  fdiBrChecker.io.lastBranch := ifu.io.fdi.lastBranch.bits
+  fdiBrChecker.io.target := ifu.io.fdi.startAddr
+  ifu.io.fdi.brResp := fdiBrChecker.io.resp.fdi_fault
+
 
   // val tlb_req_arb     = Module(new Arbiter(new TlbReq, 2))
   // tlb_req_arb.io.in(0) <> ifu.io.iTLBInter.req

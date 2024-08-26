@@ -62,6 +62,9 @@ class IFUFDIIO(implicit p: Parameters) extends XSBundle {
   // for tagger
   val startAddr: UInt = Output(UInt(VAddrBits.W))
   val notTrusted: Vec[Bool] = Input(Vec(FetchWidth * 2, Bool()))
+  // for branch checker
+  val lastBranch = ValidIO(UInt(VAddrBits.W))
+  val brResp: UInt = Input(FDICheckFault())
 }
 
 class NewIFUIO(implicit p: Parameters) extends XSBundle {
@@ -218,6 +221,10 @@ class NewIFU(implicit p: Parameters) extends XSModule
     f1_fdi_tag.zipWithIndex.foreach { case (tag, i) => tag := io.fdi.notTrusted(i * 2) }
   }
 
+  // for branch checker
+  io.fdi.lastBranch.valid := f1_ftq_req.lastBranch.valid
+  io.fdi.lastBranch.bits := f1_ftq_req.lastBranch.bits
+  val f1_fdi_br_fault: UInt = io.fdi.brResp
   /**
     ******************************************************************************
     * IFU Stage 2
@@ -273,6 +280,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
   val f2_resend_vaddr     = RegEnable(f1_ftq_req.startAddr + 2.U, f1_fire)
 
   val f2_fdi_tag       = RegEnable(f1_fdi_tag, f1_fire)
+  val f2_fdi_br_fault  = RegEnable(f1_fdi_br_fault, f1_fire)
 
   def isNextLine(pc: UInt, startAddr: UInt) = {
     startAddr(blockOffBits) ^ pc(blockOffBits)
@@ -398,7 +406,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
   val f3_pAddrs   = RegEnable(f2_paddrs, f2_fire)
   val f3_resend_vaddr   = RegEnable(f2_resend_vaddr, f2_fire)
   val f3_fdi_tag     = RegEnable(f2_fdi_tag, f2_fire)
-
+  val f3_fdi_br_fault = RegEnable(f2_fdi_br_fault, f2_fire)
   when(f3_valid && !f3_ftq_req.ftqOffset.valid){
     assert(f3_ftq_req.startAddr + 32.U >= f3_ftq_req.nextStartAddr , "More tha 32 Bytes fetch is not allowed!")
   }
@@ -628,6 +636,8 @@ class NewIFU(implicit p: Parameters) extends XSModule
   io.toIbuffer.bits.triggered   := f3_triggered
   io.toIbuffer.bits.mmioFetch   := false.B
   io.toIbuffer.bits.fdiUntrusted := f3_fdi_tag
+  io.toIbuffer.bits.fdiBrFault := f3_fdi_br_fault
+  io.toIbuffer.bits.lastBranch := f3_ftq_req.lastBranch.bits
 
   when(f3_lastHalf.valid){
     io.toIbuffer.bits.enqEnable := checkerOutStage1.fixedRange.asUInt & f3_instr_valid.asUInt & f3_lastHalf_mask

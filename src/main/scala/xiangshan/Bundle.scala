@@ -119,7 +119,8 @@ class CtrlFlow(implicit p: Parameters) extends XSBundle {
   val ftqOffset = UInt(log2Up(PredictWidth).W)
   // needs to be checked by FDI
   val fdiUntrusted = Bool()
-
+  // info of branch fault by last branch
+  val lastBranch = ValidUndirectioned(UInt(VAddrBits.W))
   //vector
 
 }
