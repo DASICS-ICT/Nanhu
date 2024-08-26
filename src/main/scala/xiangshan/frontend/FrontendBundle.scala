@@ -36,6 +36,9 @@ class FetchRequestBundle(implicit p: Parameters) extends XSBundle with HasICache
   val ftqIdx          = new FtqPtr
   val ftqOffset       = ValidUndirectioned(UInt(log2Ceil(PredictWidth).W))
 
+  // last branch for dasics check
+  val lastBranch: ValidUndirectioned[UInt] = ValidUndirectioned(UInt(VAddrBits.W))
+
   def crossCacheline =  startAddr(blockOffBits - 1) === 1.U
 
   def fromFtqPcBundle(b: Ftq_RF_Components) = {
@@ -123,6 +126,8 @@ class FetchToIBuffer(implicit p: Parameters) extends XSBundle {
   val triggered    = Vec(PredictWidth, new TriggerCf)
   val mmioFetch = Bool()
   val fdiUntrusted = Vec(PredictWidth, Bool())
+  val fdiBrFault: UInt = FDICheckFault()  // last branch to this instr block is illegal
+  val lastBranch: UInt = UInt(VAddrBits.W)
 }
 
 // class BitWiseUInt(val width: Int, val init: UInt) extends Module {

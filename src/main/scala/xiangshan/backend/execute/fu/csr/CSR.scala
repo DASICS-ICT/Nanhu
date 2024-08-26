@@ -1195,8 +1195,10 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val hasStoreAccessFault   = hasException && exceptionVecFromRob(storeAccessFault)
   val hasBreakPoint         = hasException && exceptionVecFromRob(breakPoint)
   val hasFdiULoadFault      = hasException && exceptionVecFromRob(fdiULoadAccessFault)
-  val hasFfdiUStoreFault     = hasException && exceptionVecFromRob(fdiUStoreAccessFault)
+  val hasFdiUStoreFault     = hasException && exceptionVecFromRob(fdiUStoreAccessFault)
   val hasFdiUJumpFault      = hasException && exceptionVecFromRob(fdiUJumpFault)
+    // interrupt and fdi jump both occurs
+  val hasFdiJumpIntr        = hasIntr && exceptionVecFromRob(fdiUJumpFault)
   val hasSingleStep         = hasException && csrio.exception.bits.uop.ctrl.singleStep
   val hasTriggerFire        = hasException && csrio.exception.bits.uop.cf.trigger.canFire
   val triggerFrontendHitVec = csrio.exception.bits.uop.cf.trigger.frontendHit
@@ -1259,18 +1261,22 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     hasLoadAddrMisalign,
     hasStoreAddrMisalign,
     hasFdiULoadFault,
-    hasFfdiUStoreFault,
+    hasFdiUStoreFault,
     hasFdiUJumpFault
   )).asUInt.orR
   when (RegNext(RegNext(updateTval))) {
-      val tval = Mux(
+    val tval = Mux(
+      RegNext(RegNext(hasFdiUJumpFault && csrio.exception.bits.uop.cf.lastBranch.valid)),
+      RegNext(RegNext(csrio.exception.bits.uop.cf.pc)),
+      Mux(
         RegNext(RegNext(hasInstrPageFault || hasInstrAccessFault)),
         RegNext(RegNext(Mux(
           csrio.exception.bits.uop.cf.crossPageIPFFix,
           exceptionNextAddr,
           SignExt(csrio.exception.bits.uop.cf.pc, XLEN)
-        ))),
-        memExceptionAddr
+      ))),
+      memExceptionAddr
+      )
     )
     when (RegNext(priviledgeMode === ModeM)) {
       mtval := tval
@@ -1325,6 +1331,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val dcsrNew = WireInit(dcsr.asTypeOf(new DcsrStruct))
     val debugModeNew = WireInit(debugMode)
+    val lastBranchInfo = WireInit(csrio.exception.bits.uop.cf.lastBranch)
+    val hasFdiBrFault = hasFdiUJumpFault && lastBranchInfo.valid
+    val hasFdiBrIntr = hasFdiJumpIntr && lastBranchInfo.valid
     when (hasDebugTrap && !debugMode) {
       import DcsrStruct._
       debugModeNew := true.B
@@ -1348,14 +1357,18 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
       //do nothing
     }.elsewhen (delegS && delegU) {
       ucause := causeNO
-      uepc := Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC)
+      uepc := Mux(hasFdiBrFault || hasFdiBrIntr,
+                lastBranchInfo.bits,
+                Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC))
       mstatusNew.pie.u := mstatusOld.ie.u
       mstatusNew.ie.u := false.B
       priviledgeMode := ModeU
       when (clearTval) { utval := 0.U }
     }.elsewhen (delegS && !delegU) {
       scause := causeNO
-      sepc := Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC)
+      sepc := Mux(hasFdiBrFault || hasFdiBrIntr,
+                lastBranchInfo.bits,
+                Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC))
       mstatusNew.spp := priviledgeMode
       mstatusNew.pie.s := mstatusOld.ie.s
       mstatusNew.ie.s := false.B
@@ -1363,7 +1376,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
       when (clearTval) { stval := 0.U }
     }.otherwise {
       mcause := causeNO
-      mepc := Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC)
+      mepc := Mux(hasFdiBrFault || hasFdiBrIntr,
+                lastBranchInfo.bits,
+                Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC))
       mstatusNew.mpp := priviledgeMode
       mstatusNew.pie.m := mstatusOld.ie.m
       mstatusNew.ie.m := false.B

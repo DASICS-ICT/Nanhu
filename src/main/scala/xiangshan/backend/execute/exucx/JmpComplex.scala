@@ -34,7 +34,6 @@ class JmpComplexImp(outer:JmpComplex, id: Int, bypassNum:Int) extends BasicExuCo
   val io = IO(new Bundle {
     val prefetchI = Output(Valid(UInt(p(XSCoreParamsKey).XLEN.W)))
     val fdicallJumpExcpIO = Output(new FDICallJumpExcpIO())
-    val fdicallDistributedCSR = Input(new DistributedCSRIO())
   })
 
   issueOut <> issueIn
@@ -45,5 +44,4 @@ class JmpComplexImp(outer:JmpComplex, id: Int, bypassNum:Int) extends BasicExuCo
   issueIn.issue.ready := issueOut.issue.ready
 
   outer.jmp.module.io.fdicallJumpExcpIO <> io.fdicallJumpExcpIO
-  outer.jmp.module.io.fdicallDistributedCSR <> io.fdicallDistributedCSR
 }

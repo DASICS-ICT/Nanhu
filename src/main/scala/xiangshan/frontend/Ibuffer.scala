@@ -24,6 +24,7 @@ import utils._
 import xs.utils._
 import xiangshan.ExceptionNO._
 import xs.utils.perf.HasPerfLogging
+import xiangshan.backend.execute.fu.FDICheckFault
 
 class IbufPtr(implicit p: Parameters) extends CircularQueuePtr[IbufPtr](
   p => p(XSCoreParamsKey).IBufSize
@@ -50,6 +51,8 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
   val crossPageIPFFix = Bool()
   val triggered = new TriggerCf
   val fdiUntrusted = Bool()
+  val fdiBrFault: UInt = FDICheckFault()
+  val lastBranch: UInt = UInt(VAddrBits.W)
 
   def fromFetch(fetch: FetchToIBuffer, i: Int): IBufEntry = {
     inst   := fetch.instrs(i)
@@ -64,6 +67,12 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
     crossPageIPFFix := fetch.crossPageIPFFix(i)
     triggered := fetch.triggered(i)
     fdiUntrusted := fetch.fdiUntrusted(i)
+    fdiBrFault := FDICheckFault.noFDIFault
+    lastBranch := DontCare
+    if (i == 0) { // only the first instr is a branch target
+      fdiBrFault := fetch.fdiBrFault
+      lastBranch := fetch.lastBranch
+    }
     this
   }
 
@@ -75,6 +84,7 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
     cf.exceptionVec := 0.U.asTypeOf(ExceptionVec())
     cf.exceptionVec(instrPageFault) := ipf
     cf.exceptionVec(instrAccessFault) := acf
+    cf.exceptionVec(fdiUJumpFault) := fdiBrFault === FDICheckFault.UJumpFDIFault
     cf.trigger := triggered
     cf.pd := pd
     cf.pred_taken := pred_taken
@@ -87,6 +97,8 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
     cf.ftqPtr := ftqPtr
     cf.ftqOffset := ftqOffset
     cf.fdiUntrusted := fdiUntrusted
+    cf.lastBranch.valid := fdiBrFault =/= FDICheckFault.noFDIFault
+    cf.lastBranch.bits := lastBranch
     cf
   }
 }

@@ -68,7 +68,6 @@ class IntegerBlockImp(outer:IntegerBlock) extends BasicExuBlockImp(outer){
   val jmp_module = outer.jmps.head.module
   val fdiUJumpExcpVAddr = RegEnable(jmp_module.io.fdicallJumpExcpIO.target, jmp_module.io.fdicallJumpExcpIO.isJumpExcp)
   outer.aluMiscs.head.module.io.fdicallJumpExcpIO <> jmp_module.io.fdicallJumpExcpIO
-  outer.aluMiscs.head.module.io.csrio.customCtrl.distribute_csr <> jmp_module.io.fdicallDistributedCSR
   outer.aluMiscs.head.module.io.csrio.memExceptionVAddr :=
     Mux(outer.aluMiscs.head.module.io.csrio.exception.bits.uop.cf.exceptionVec(fdiUJumpFault),
       fdiUJumpExcpVAddr, io.csrio.memExceptionVAddr)
