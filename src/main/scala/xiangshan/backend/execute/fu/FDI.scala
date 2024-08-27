@@ -332,6 +332,7 @@ class JumpFDI(implicit p: Parameters) extends XSModule
     MaskedRegMap(FDIMainCall, fdi_main_call),
     MaskedRegMap(FDIReturnPc, fdi_return_pc),
     MaskedRegMap(FDIUMainCfg, fdi_umain_cfg, "h2".U(XLEN.W)),
+    MaskedRegMap(FDIActiveZoneReturnPc, fdi_azone_return_pc)
     MaskedRegMap(FDIUMainBoundLo, fdi_umain_bound_lo),
     MaskedRegMap(FDIUMainBoundHi, fdi_umain_bound_hi)
   )
@@ -356,7 +357,7 @@ class JumpFDI(implicit p: Parameters) extends XSModule
   val targetInActiveZone  = io.control_flow.under_check.valid && !fdi_jump_check(target, fdi)
 
   val legalJumpTarget = isTrustedZone  || 
-                        (!isTrustedZone &&  targetInTrustedZone && (target === fdi_return_pc || target === fdi_main_call)) ||
+                        (!isTrustedZone &&  targetInTrustedZone && (target === fdi_return_pc || target === fdi_main_call || target === fdi_azone_return_pc)) ||
                         targetInActiveZone
 
   io.control_flow.check_result.control_flow_legal := legalJumpTarget
