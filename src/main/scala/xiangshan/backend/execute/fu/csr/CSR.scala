@@ -355,6 +355,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   val fdiMainCallReg: UInt = RegInit(UInt(XLEN.W), 0.U)
   val fdiReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val fdiAZoneReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
   val fdiMemBoundRegs: Vec[FDIEntry] = Wire(Vec(NumFDIMemBounds, new FDIEntry()))  // just used for method parameter
   val fdiJumpBoundRegs: Vec[FDIJumpEntry] = Wire(Vec(NumFDIJumpBounds, new FDIJumpEntry()))  
   val fdiMapping: Map[Int, (UInt, UInt, UInt => UInt, UInt, UInt => UInt)] = FDIGenMemMapping(
@@ -367,6 +368,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     MaskedRegMap(FDIUMainBoundHi, fdiUMainBoundHi),
     MaskedRegMap(FDIMainCall, fdiMainCallReg),
     MaskedRegMap(FDIReturnPc, fdiReturnPcReg),
+    MaskedRegMap(FDIActiveZoneReturnPc, fdiAZoneReturnPcReg)
   )
 
   val spmpSwitch = RegInit(0.U(XLEN.W))
@@ -873,7 +875,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrio.isPerfCnt := addrInPerfCnt && valid && func =/= CSROpType.jmp && !isVset
 
   val addrInFDI =  (addr >= FDIUMainCfg.U) && (addr <= FDIUMainBoundHi.U) || 
-    (addr === FDIMainCall.U) || (addr === FDIReturnPc.U) ||
+    (addr >= FDIMainCall.U) && (addr <= FDIActiveZoneReturnPc.U) ||
     (addr >= FDILibBoundBase.U) && (addr < (FDILibBoundBase + NumFDIMemBounds * 2).U) || 
     (addr >= FDIJmpBoundBase.U) && (addr <= FDIJmpCfgBase.U) || 
     addr === FDILibCfgBase.U
@@ -1467,6 +1469,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     }
     difftestCSR.fdiMainCall := fdiMainCallReg
     difftestCSR.fdiReturnPC := fdiReturnPcReg
+    difftestCSR.fdiAZoneReturnPC := fdiAZoneReturnPcReg
   }
 
   if(env.AlwaysBasicDiff || env.EnableDifftest) {
