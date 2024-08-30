@@ -166,8 +166,8 @@ package object xiangshan {
   }
 
   object ExceptionVec {
-    // 16 RV exception + 3 FDI excepiton
-    def apply() = Vec(16 + 3, Bool())
+    // 16 RV exception + 8 FDI excepiton
+    def apply() = Vec(16 + 8, Bool())
   }
 
   object PMAMode {
@@ -333,12 +333,18 @@ package object xiangshan {
     def FDIExcOffset = 8
     //  FDI excetption       number    offset
     def fdiUJumpFault = 24 - FDIExcOffset
-    def fdiULoadAccessFault = 25 - FDIExcOffset
-    def fdiUStoreAccessFault = 26 - FDIExcOffset
-
+    def fdiSJumpFault = 25 - FDIExcOffset
+    def fdiULoadAccessFault = 26 - FDIExcOffset
+    def fdiSLoadAccessFault = 27 - FDIExcOffset
+    def fdiUStoreAccessFault = 28 - FDIExcOffset
+    def fdiSStoreAccessFault = 29 - FDIExcOffset
+    def fdiUEcallAccessFault = 30 - FDIExcOffset
+    def fdiSEcallAccessFault = 31 - FDIExcOffset
 
     def prioritiesALL = Seq(
       // FDI Instruction fault actually belongs to the last branch instr
+      fdiSJumpFault,
+      fdiUJumpFault,
       breakPoint, // TODO: different BP has different priority
       instrPageFault,
       instrAccessFault,
@@ -351,9 +357,12 @@ package object xiangshan {
       loadPageFault,
       storeAccessFault,
       loadAccessFault,
-      fdiUJumpFault,
+      fdiSLoadAccessFault,
+      fdiSStoreAccessFault,
+      fdiSEcallAccessFault,
       fdiULoadAccessFault,
-      fdiUStoreAccessFault
+      fdiUStoreAccessFault,
+      fdiUEcallAccessFault
     )
     def prioritiesRegular = Seq(
       // FDI Instruction fault actually belongs to the last branch instr
@@ -375,12 +384,21 @@ package object xiangshan {
       instrAddrMisaligned,
       instrAccessFault,
       illegalInstr,
-      instrPageFault
+      instrPageFault,
+      fdiUJumpFault,
+      fdiSJumpFault,
+      fdiUEcallAccessFault,
+      fdiSEcallAccessFault
     )
     def fdiSet = Seq(
       fdiUJumpFault,
+      fdiSJumpFault,
       fdiULoadAccessFault,
-      fdiUStoreAccessFault
+      fdiSLoadAccessFault,
+      fdiUStoreAccessFault,
+      fdiSStoreAccessFault,
+      fdiUEcallAccessFault,
+      fdiSEcallAccessFault
     )
     def partialSelect(vec: Vec[Bool], select: Seq[Int]): Vec[Bool] = {
       val new_vec = Wire(ExceptionVec())
