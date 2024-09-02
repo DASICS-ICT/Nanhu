@@ -244,12 +244,10 @@ class FDIMemCheckerIO(implicit p: Parameters) extends XSBundle with FDIConst{
 // TODO: Need a better name
 class FDICallJumpExcpIO(implicit p: Parameters) extends XSBundle with FDIConst {
   val isFDICall = Output(Bool())
-  val isJumpExcp = Output(Bool())
   val target = Output(UInt(XLEN.W))
 
-  def connect(isFDICall: Bool, isJumpExcp: Bool, target: UInt): Unit = {
+  def connect(isFDICall: Bool, target: UInt): Unit = {
     this.isFDICall := isFDICall
-    this.isJumpExcp := isJumpExcp
     this.target := target
   }
 }

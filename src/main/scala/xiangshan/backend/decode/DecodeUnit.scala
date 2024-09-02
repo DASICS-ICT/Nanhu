@@ -1105,6 +1105,10 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
 
   val illegalVec = (isVector || isVtype) && !extEn.vec
 
+  // fdi decode check
+  val fdiEn = io.csrCtrl.fdi_enable
+  val illegalFDI = FDICALL_JR === ctrl_flow.instr && (!fdiEn || ctrl_flow.fdiUntrusted)
+
   // read src1~3 location
   cs.lsrc(0) := ctrl_flow.instr(RS1_MSB, RS1_LSB)
   cs.lsrc(1) := ctrl_flow.instr(RS2_MSB, RS2_LSB)
