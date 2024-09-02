@@ -1107,7 +1107,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
 
   // fdi decode check
   val fdiEn = io.csrCtrl.fdi_enable
-  val illegalFDI = FDICALL_JR === ctrl_flow.instr && !fdiEn
+  val illegalFDI = FDICALL_JR === ctrl_flow.instr && (!fdiEn || ctrl_flow.fdiUntrusted)
 
   // read src1~3 location
   cs.lsrc(0) := ctrl_flow.instr(RS1_MSB, RS1_LSB)

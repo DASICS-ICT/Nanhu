@@ -74,6 +74,5 @@ class JmpExuImpl(outer:JmpExu, exuCfg:ExuConfig)(implicit p:Parameters) extends 
   writebackPort.bits.debug.vaddr := 0.U
 
   private val isFDICall = jmp.io.in.valid && JumpOpType.jumpOpIsFDIcall((jmp.io.in.bits.uop.ctrl.fuOpType))
-  private val isJumpExcp = jmp.io.out.bits.uop.cf.exceptionVec(fdiUJumpFault)
-  io.fdicallJumpExcpIO.connect(isFDICall, isJumpExcp, Mux(isFDICall, jmp.io.out.bits.data, jmp.redirectOut.cfiUpdate.target))
+  io.fdicallJumpExcpIO.connect(isFDICall, Mux(isFDICall, jmp.io.out.bits.data, jmp.redirectOut.cfiUpdate.target))
 }
