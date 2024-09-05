@@ -317,6 +317,7 @@ class ExternalInterruptIO(implicit p: Parameters) extends XSBundle {
   val msip = Input(Bool())
   val meip = Input(Bool())
   val seip = Input(Bool())
+  val ueip = Input(Bool())
   val debug = Input(Bool())
 }
 

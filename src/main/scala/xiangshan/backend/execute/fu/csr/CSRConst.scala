@@ -64,6 +64,8 @@ trait HasCSRConst {
   val Utval         = 0x043
   val Uip           = 0x044
 
+  val Utimer        = 0x045
+
   // User FDI registers
   val FDILibCfgBase = 0x880
   val FDILibBoundBase = 0x890

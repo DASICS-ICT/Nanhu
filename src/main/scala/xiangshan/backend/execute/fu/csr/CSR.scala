@@ -337,6 +337,10 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val mideleg = RegInit(UInt(XLEN.W), 0.U)
   val mscratch = RegInit(UInt(XLEN.W), 0.U)
 
+
+  // Hart Priviledge Mode
+  val priviledgeMode = RegInit(UInt(2.W), ModeM)
+
   // PMP Mapping
   val pmp = Wire(Vec(NumPMP, new PMPEntry())) // just used for method parameter
   val pma = Wire(Vec(NumPMA, new PMPEntry())) // just used for method parameter
@@ -535,6 +539,12 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val utvec = RegInit(UInt(XLEN.W), 0.U)
   val utval = RegInit(UInt(XLEN.W), 0.U)
 
+  val utimer = RegInit(UInt(XLEN.W), 0.U)
+
+  when (priviledgeMode === ModeU && utimer > 1.U){
+    utimer := utimer - 1.U
+  }
+
   // fcsr
   class FcsrStruct extends Bundle {
     val reserved = UInt((XLEN-3-5).W)
@@ -681,8 +691,6 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrio.vcsr.vtype.vtypeRead.readEn := valid && !isVset && (addr===Vtype.asUInt)
   csrio.vcsr.vtype.vlRead.readEn    := valid && !isVset && (addr===Vl.asUInt)
 
-  // Hart Priviledge Mode
-  val priviledgeMode = RegInit(UInt(2.W), ModeM)
 
   //val perfEventscounten = List.fill(nrPerfCnts)(RegInit(false(Bool())))
   // Perf Counter
@@ -838,7 +846,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   private val userMapping = Map(
     //--- User Trap Setup ---
     MaskedRegMap(Ustatus, mstatus, ustatusWmask, mstatusUpdateSideEffect, ustatusRmask),
-    MaskedRegMap(Uie, mie, uieMask, MaskedRegMap.Unwritable, uieMask),
+    MaskedRegMap(Uie, mie, uieMask, MaskedRegMap.NoSideEffect, uieMask),
     MaskedRegMap(Utvec, utvec, utvecMask, MaskedRegMap.NoSideEffect, utvecMask),
 
     // User Trap Handling
@@ -846,7 +854,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     MaskedRegMap(Uepc, uepc, uepcMask, MaskedRegMap.NoSideEffect, uepcMask),
     MaskedRegMap(Ucause, ucause),
     MaskedRegMap(Utval, utval),
-    MaskedRegMap(Uip, mip.asUInt, 0.U(XLEN.W), MaskedRegMap.Unwritable, uipMask)
+    MaskedRegMap(Uip, mip.asUInt, 0.U(XLEN.W), MaskedRegMap.Unwritable, uipMask),
+    MaskedRegMap(Utimer, utimer)
   )
 
   val mapping = basicPrivMapping ++
@@ -874,6 +883,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     addr === Mip.U
   csrio.isPerfCnt := addrInPerfCnt && valid && func =/= CSROpType.jmp && !isVset
 
+  val addrInNExt = (addr === Ustatus.U) || (addr === Uie.U) || (addr === Utvec.U) ||
+                   (addr >= Uscratch.U) && (addr <= Utimer.U)
+
   val addrInFDI =  (addr >= FDIUMainCfg.U) && (addr <= FDIUMainBoundHi.U) || 
     (addr >= FDIMainCall.U) && (addr <= FDIActiveZoneReturnPc.U) ||
     (addr >= FDILibBoundBase.U) && (addr < (FDILibBoundBase + NumFDIMemBounds * 2).U) || 
@@ -897,7 +909,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val perfcntPermitted = perfcntPermissionCheck(addr, priviledgeMode, mcounteren, scounteren)
   val vcsrPermitted = vcsrAccessPermissionCheck(addr, wen, mstatusStruct.vs)
   val fcsrPermitted = fcsrAccessPermissionCheck(addr, wen, mstatusStruct.fs)
-  val FDIPermitted = !(CSROpType.needAccess(func) && addrInFDI && isUntrusted)
+  val FDIPermitted = !(CSROpType.needAccess(func) && (addrInFDI || addrInNExt) && isUntrusted)
   val permitted = Mux(addrInPerfCnt && addr =/= Mip.U, perfcntPermitted, modePermitted) && accessPermitted && vcsrPermitted && fcsrPermitted && FDIPermitted
   vtypeNoException := vcsrPermitted
 
@@ -1160,6 +1172,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   mipWire.s.m := csrio.externalInterrupt.msip
   mipWire.e.m := csrio.externalInterrupt.meip
   mipWire.e.s := csrio.externalInterrupt.seip
+  mipWire.e.u := csrio.externalInterrupt.ueip | (utimer === 1.U)
 
   // interrupts
   val allIntrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(intrVec(i), i.U, sum))
