@@ -29,8 +29,9 @@ import xiangshan.ExceptionNO._
 import xiangshan.backend.execute.fu.PMPRespBundle
 import xiangshan.backend.execute.fu.csr.SdtrigExt
 import xs.utils.perf.HasPerfLogging
-
-class AtomicsUnit(implicit p: Parameters) extends XSModule with MemoryOpConstants with SdtrigExt with HasPerfLogging{
+import xiangshan.backend.execute.fu.FDIFaultReason
+import xiangshan.backend.execute.fu.FDIConst
+class AtomicsUnit(implicit p: Parameters) extends XSModule with MemoryOpConstants with SdtrigExt with HasPerfLogging with FDIConst{
   val io = IO(new Bundle() {
     val hartId = Input(UInt(8.W))
     val in            = Flipped(Decoupled(new ExuInput))
@@ -53,6 +54,7 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule with MemoryOpConstant
   val data_valid = RegInit(false.B)
   val in = Reg(new ExuInput())
   val exceptionVec = RegInit(0.U.asTypeOf(ExceptionVec()))
+  val fdiFReasonReg = RegInit(0.U(FDIFaultWidth.W))
   val atom_override_xtval = RegInit(false.B)
   val isLr = in.uop.ctrl.fuOpType === LSUOpType.lr_w || in.uop.ctrl.fuOpType === LSUOpType.lr_d
   // paddr after translation
@@ -134,6 +136,18 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule with MemoryOpConstant
       //software is used to restrict atomic instructions from accessing mmio. Now if is_mmio is true,we treat it as an exception
       exceptionVec(storeAccessFault)    := io.dtlb.resp.bits.excp(0).af.st
       exceptionVec(loadAccessFault)     := io.dtlb.resp.bits.excp(0).af.ld
+
+      val PKPFReason = Mux(io.dtlb.resp.bits.excp(0).pkf.st,FDIFaultReason.StoreMPKFault,FDIFaultReason.LoadMPKFault)
+      
+      when (io.dtlb.resp.bits.excp(0).pkf.ld || io.dtlb.resp.bits.excp(0).pkf.st) {
+        exceptionVec(fdiUCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiUCheckFault) || io.dtlb.resp.bits.excp(0).pkf.isUser
+        exceptionVec(fdiSCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiSCheckFault) || !io.dtlb.resp.bits.excp(0).pkf.isUser
+        fdiFReasonReg := Mux(PKPFReason > io.in.bits.uop.cf.fdiFaultReason, PKPFReason, io.in.bits.uop.cf.fdiFaultReason)
+      }
+      // exceptionVec(pkuLoadPageFault)    := io.dtlb.resp.bits.excp(0).pkf.ld &&  io.dtlb.resp.bits.excp(0).pkf.isUser
+      // exceptionVec(pkuStorePageFault)   := io.dtlb.resp.bits.excp(0).pkf.st &&  io.dtlb.resp.bits.excp(0).pkf.isUser
+      // exceptionVec(pksLoadPageFault)    := io.dtlb.resp.bits.excp(0).pkf.ld && !io.dtlb.resp.bits.excp(0).pkf.isUser
+      // exceptionVec(pksStorePageFault)   := io.dtlb.resp.bits.excp(0).pkf.st && !io.dtlb.resp.bits.excp(0).pkf.isUser
       static_pm := io.dtlb.resp.bits.static_pm
 
       when (!io.dtlb.resp.bits.miss) {
@@ -162,7 +176,8 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule with MemoryOpConstant
     is_mmio := pmp.mmio
     // NOTE: only handle load/store exception here, if other exception happens, don't send here
     val exception_va = exceptionVec(storePageFault) || exceptionVec(loadPageFault) ||
-      exceptionVec(storeAccessFault) || exceptionVec(loadAccessFault)
+      exceptionVec(storeAccessFault) || exceptionVec(loadAccessFault) ||
+      ((exceptionVec(fdiUCheckFault) || exceptionVec(fdiSCheckFault)) && (fdiFReasonReg === FDIFaultReason.LoadMPKFault || fdiFReasonReg === FDIFaultReason.StoreMPKFault))
     val exception_pa = pmp.st || pmp.ld
     when (exception_va || exception_pa) {
       state := s_finish
@@ -291,6 +306,7 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule with MemoryOpConstant
   io.out.bits := DontCare
   io.out.bits.uop := in.uop
   io.out.bits.uop.cf.exceptionVec := exceptionVec
+  io.out.bits.uop.cf.fdiFaultReason := fdiFReasonReg
   io.out.bits.data := resp_data
   io.out.bits.redirectValid := false.B
   io.out.bits.debug.isMMIO := is_mmio

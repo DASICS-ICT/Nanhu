@@ -137,10 +137,12 @@ class TLBFA(
     if (nWays == 1) {
       resp.bits.ppn(0) := entries(0).genPPN(saveLevel, req.valid)(vpn_gen_ppn)
       resp.bits.perm(0) := entries(0).perm
+      resp.bits.pkey(0) := entries(0).pkey
       isSuperPage(i) := entries(0).isSuperPage()
     } else {
       resp.bits.ppn(0) := ParallelMux(hitVecReg zip entries.map(_.genPPN(saveLevel, req.valid)(vpn_gen_ppn)))
       resp.bits.perm(0) := ParallelMux(hitVecReg zip entries.map(_.perm))
+      resp.bits.pkey(0) := ParallelMux(hitVecReg zip entries.map(_.pkey))
       isSuperPage(i) := ParallelMux(hitVecReg zip entries.map(_.isSuperPage()))
     }
     io.r.resp_hit_sameCycle(i) := Cat(hitVec).orR
@@ -152,6 +154,7 @@ class TLBFA(
     resp.bits.hit.suggestName("hit")
     resp.bits.ppn.suggestName("ppn")
     resp.bits.perm.suggestName("perm")
+    resp.bits.pkey.suggestName("pkey")
   }
 
   when (io.w.valid) {
@@ -202,6 +205,7 @@ class TLBFA(
   def ns_to_n(ns: TlbEntry): TlbEntry = {
     val n = Wire(new TlbEntry(pageNormal = true, pageSuper = false))
     n.perm := ns.perm
+    n.pkey := ns.pkey
     n.ppn := ns.ppn
     n.tag := ns.tag
     n.asid := ns.asid
@@ -280,6 +284,7 @@ class TLBSA(
     for (d <- 0 until nDups) {
       resp.bits.ppn(d) := data(d).genPPN()(vpn_reg)
       resp.bits.perm(d) := data(d).perm
+      resp.bits.pkey(d) := data(d).pkey
     }
     io.r.resp_hit_sameCycle(i) := DontCare
 
@@ -287,6 +292,7 @@ class TLBSA(
     resp.bits.hit.suggestName("hit")
     resp.bits.ppn.suggestName("ppn")
     resp.bits.perm.suggestName("perm")
+    resp.bits.pkey.suggestName("pkey")
 
     access.sets := get_set_idx(vpn_reg, nSets) // no use
     access.touch_ways.valid := resp.valid && hit

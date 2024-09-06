@@ -430,6 +430,11 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(32.W), 0.U)
 
+  // Supervisor-level MPK Registers
+  val spkrs = RegInit(UInt(XLEN.W), 0.U)
+  val spkctl = RegInit(UInt(XLEN.W), 0.U)
+  val spkctlMask = "h3".U(XLEN.W)  // 0: pke, 1: pks
+
   // sbpctl
   // Bits 0-7: {LOOP, RAS, SC, TAGE, BIM, BTB, uBTB}
   val sbpctl = RegInit(UInt(XLEN.W), "h7f".U)
@@ -699,6 +704,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val needReadVl = valid && !isVset && (addr===Vl.asUInt) && vtypeNoException
   csrio.vcsr.vtype.vtypeRead.readEn := valid && !isVset && (addr===Vtype.asUInt)
   csrio.vcsr.vtype.vlRead.readEn    := valid && !isVset && (addr===Vl.asUInt)
+  // User-Level MPK Register
+  val upkru = RegInit(UInt(XLEN.W), 0.U)
 
 
   //val perfEventscounten = List.fill(nrPerfCnts)(RegInit(false(Bool())))
@@ -867,11 +874,18 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     MaskedRegMap(Utimer, utimer)
   )
 
+  val mpkMapping = Map(
+    MaskedRegMap(Upkru, upkru),
+    MaskedRegMap(Spkrs, spkrs),
+    MaskedRegMap(Spkctl, spkctl, spkctlMask),
+  )
+
   val mapping = basicPrivMapping ++
                 perfCntMapping ++
                 pmpMapping ++
                 pmaMapping ++
                 spmpMapping ++
+                mpkMapping ++
                 (if (HasFPU) fcsrMapping else Nil) ++
                 (if (HasCustomCSRCacheOp) cacheopMapping else Nil) ++ 
                 (if (hasVector) vcsrMapping else Nil) ++
@@ -902,6 +916,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     (addr >= FDIJmpBoundBase.U) && (addr <= FDIJmpCfgBase.U) || 
     addr === FDILibCfgBase.U
 
+  val addrInMPK = (addr === Spkctl.U) || (addr === Spkrs.U) || (addr === Upkru.U)
+
   // satp wen check
   val satpLegalMode = (wdata.asTypeOf(new SatpStruct).mode===0.U) || (wdata.asTypeOf(new SatpStruct).mode===8.U)
 
@@ -919,7 +935,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val perfcntPermitted = perfcntPermissionCheck(addr, priviledgeMode, mcounteren, scounteren)
   val vcsrPermitted = vcsrAccessPermissionCheck(addr, wen, mstatusStruct.vs)
   val fcsrPermitted = fcsrAccessPermissionCheck(addr, wen, mstatusStruct.fs)
-  val FDIPermitted = !(CSROpType.needAccess(func) && (addrInFDI || addrInNExt) && isUntrusted)
+  val FDIPermitted = !(CSROpType.needAccess(func) && (addrInFDI || addrInNExt || addrInMPK) && isUntrusted)
   val permitted = Mux(addrInPerfCnt && addr =/= Mip.U, perfcntPermitted, modePermitted) && accessPermitted && vcsrPermitted && fcsrPermitted && FDIPermitted
   vtypeNoException := vcsrPermitted
 
@@ -1041,6 +1057,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   tlbBundle.priv.sum   := mstatusStruct.sum.asBool
   tlbBundle.priv.imode := priviledgeMode
   tlbBundle.priv.dmode := Mux(debugMode && dcsr.asTypeOf(new DcsrStruct).mprven, ModeM, Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode))
+  tlbBundle.mpk.enable := Mux(priviledgeMode === ModeU, spkctl(0), Mux(priviledgeMode === ModeS, spkctl(1), false.B))
+  tlbBundle.mpk.pkr    := Mux(priviledgeMode === ModeU, upkru, spkrs)
 
   // Branch control
   val retTarget = WireInit(0.U)
@@ -1235,6 +1253,11 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val hasFdiSLoadFault      = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadFDIFault
   val hasFdiSStoreFault     = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreFDIFault
   val hasFdiSJumpFault      = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault
+
+  val hasPKULoadPageFault   = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadMPKFault
+  val hasPKUStorePageFault  = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreMPKFault
+  val hasPKSLoadPageFault   = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadMPKFault
+  val hasPKSStorePageFault  = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreMPKFault
     // interrupt and fdi jump both occurs
   val hasFdiJumpIntr        = (hasIntr && 
                                (exceptionVecFromRob(fdiUCheckFault) || exceptionVecFromRob(fdiSCheckFault)) && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault)
@@ -1295,6 +1318,10 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     hasInstrPageFault,
     hasLoadPageFault,
     hasStorePageFault,
+    hasPKULoadPageFault,
+    hasPKUStorePageFault,
+    hasPKSLoadPageFault,
+    hasPKSStorePageFault,
     hasInstrAccessFault,
     hasLoadAccessFault,
     hasStoreAccessFault,
@@ -1545,6 +1572,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     difftestCSR.fdiReturnPC := fdiReturnPcReg
     difftestCSR.fdiAZoneReturnPC := fdiAZoneReturnPcReg
     difftestCSR.fdiFReason  := fdiFReasonReg
+    difftestCSR.upkru := upkru
+    difftestCSR.spkrs := spkrs
+    difftestCSR.spkctl := spkctl
   }
 
   if(env.AlwaysBasicDiff || env.EnableDifftest) {

@@ -271,7 +271,7 @@ trait HasXSParameter {
   val minFLen = 32
   val fLen = 64
   def xLen = XLEN
-
+  
   val HasMExtension = coreParams.HasMExtension
   val HasCExtension = coreParams.HasCExtension
   val HasNExtension = coreParams.HasNExtension

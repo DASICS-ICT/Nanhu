@@ -270,6 +270,12 @@ class LoadUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging{
   // af & pf exception were modified
   io.out.bits.uop.cf.exceptionVec(loadPageFault) := (io.dtlbResp.bits.excp(0).pf.ld || io.in.bits.uop.cf.exceptionVec(loadPageFault)) && EnableMem
   io.out.bits.uop.cf.exceptionVec(loadAccessFault) := io.dtlbResp.bits.excp(0).af.ld && EnableMem
+  
+  when (io.dtlbResp.bits.excp(0).pkf.ld) {
+    io.out.bits.uop.cf.exceptionVec(fdiUCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiUCheckFault) || io.dtlbResp.bits.excp(0).pkf.isUser
+    io.out.bits.uop.cf.exceptionVec(fdiSCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiSCheckFault) || !io.dtlbResp.bits.excp(0).pkf.isUser
+    io.out.bits.uop.cf.fdiFaultReason := Mux(FDIFaultReason.LoadMPKFault > io.in.bits.uop.cf.fdiFaultReason, FDIFaultReason.LoadMPKFault, io.in.bits.uop.cf.fdiFaultReason)
+  }
 
   io.out.bits.ptwBack := io.dtlbResp.bits.ptwBack
   io.out.bits.rsIdx := io.in.bits.rsIdx
