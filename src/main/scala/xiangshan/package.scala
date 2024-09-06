@@ -166,8 +166,8 @@ package object xiangshan {
   }
 
   object ExceptionVec {
-    // 16 RV exception + 8 FDI excepiton
-    def apply() = Vec(16 + 8, Bool())
+    // 16 RV exception + 1 FDI exception
+    def apply() = Vec(16 + 1, Bool())
   }
 
   object PMAMode {
@@ -332,19 +332,19 @@ package object xiangshan {
 
     def FDIExcOffset = 8
     //  FDI excetption       number    offset
-    def fdiUJumpFault = 24 - FDIExcOffset
-    def fdiSJumpFault = 25 - FDIExcOffset
-    def fdiULoadAccessFault = 26 - FDIExcOffset
-    def fdiSLoadAccessFault = 27 - FDIExcOffset
-    def fdiUStoreAccessFault = 28 - FDIExcOffset
-    def fdiSStoreAccessFault = 29 - FDIExcOffset
-    def fdiUEcallAccessFault = 30 - FDIExcOffset
-    def fdiSEcallAccessFault = 31 - FDIExcOffset
+    def fdiUCheckFault = 24 - FDIExcOffset
+
+    // def fdiUJumpFault = 24 - FDIExcOffset
+    // def fdiSJumpFault = 25 - FDIExcOffset
+    // def fdiULoadAccessFault = 26 - FDIExcOffset
+    // def fdiSLoadAccessFault = 27 - FDIExcOffset
+    // def fdiUStoreAccessFault = 28 - FDIExcOffset
+    // def fdiSStoreAccessFault = 29 - FDIExcOffset
+    // def fdiUEcallAccessFault = 30 - FDIExcOffset
+    // def fdiSEcallAccessFault = 31 - FDIExcOffset
 
     def prioritiesALL = Seq(
       // FDI Instruction fault actually belongs to the last branch instr
-      fdiSJumpFault,
-      fdiUJumpFault,
       breakPoint, // TODO: different BP has different priority
       instrPageFault,
       instrAccessFault,
@@ -357,12 +357,7 @@ package object xiangshan {
       loadPageFault,
       storeAccessFault,
       loadAccessFault,
-      fdiSLoadAccessFault,
-      fdiSStoreAccessFault,
-      fdiSEcallAccessFault,
-      fdiULoadAccessFault,
-      fdiUStoreAccessFault,
-      fdiUEcallAccessFault
+      fdiUCheckFault
     )
     def prioritiesRegular = Seq(
       // FDI Instruction fault actually belongs to the last branch instr
@@ -385,20 +380,10 @@ package object xiangshan {
       instrAccessFault,
       illegalInstr,
       instrPageFault,
-      fdiUJumpFault,
-      fdiSJumpFault,
-      fdiUEcallAccessFault,
-      fdiSEcallAccessFault
+      fdiUCheckFault
     )
     def fdiSet = Seq(
-      fdiUJumpFault,
-      fdiSJumpFault,
-      fdiULoadAccessFault,
-      fdiSLoadAccessFault,
-      fdiUStoreAccessFault,
-      fdiSStoreAccessFault,
-      fdiUEcallAccessFault,
-      fdiSEcallAccessFault
+      fdiUCheckFault
     )
     def partialSelect(vec: Vec[Bool], select: Seq[Int]): Vec[Bool] = {
       val new_vec = Wire(ExceptionVec())

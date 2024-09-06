@@ -24,8 +24,9 @@ import utils._
 import xs.utils._
 import xiangshan.ExceptionNO._
 import xs.utils.perf.HasPerfLogging
-import xiangshan.backend.execute.fu.FDICheckFault
-
+import xiangshan.backend.execute.fu.FDIFaultReason
+import xiangshan.backend.execute.fu.FDIRespDataBundle
+import xiangshan.backend.execute.fu.csr.HasCSRConst
 class IbufPtr(implicit p: Parameters) extends CircularQueuePtr[IbufPtr](
   p => p(XSCoreParamsKey).IBufSize
 ){
@@ -38,7 +39,7 @@ class IBufferIO(implicit p: Parameters) extends XSBundle {
   val full = Output(Bool())
 }
 
-class IBufEntry(implicit p: Parameters) extends XSBundle {
+class IBufEntry(implicit p: Parameters) extends XSBundle with HasCSRConst {
   val inst = UInt(32.W)
   val pc = UInt(VAddrBits.W)
   val foldpc = UInt(MemPredPCWidth.W)
@@ -51,7 +52,7 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
   val crossPageIPFFix = Bool()
   val triggered = new TriggerCf
   val fdiUntrusted = Bool()
-  val fdiBrFault: UInt = FDICheckFault()
+  val fdiBrResp = new FDIRespDataBundle
   val lastBranch: UInt = UInt(VAddrBits.W)
 
   def fromFetch(fetch: FetchToIBuffer, i: Int): IBufEntry = {
@@ -67,10 +68,11 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
     crossPageIPFFix := fetch.crossPageIPFFix(i)
     triggered := fetch.triggered(i)
     fdiUntrusted := fetch.fdiUntrusted(i)
-    fdiBrFault := FDICheckFault.noFDIFault
+    fdiBrResp.fdi_fault := FDIFaultReason.noFDIFault
+    fdiBrResp.mode := fetch.fdiBrResp.mode
     lastBranch := DontCare
     if (i == 0) { // only the first instr is a branch target
-      fdiBrFault := fetch.fdiBrFault
+      fdiBrResp.fdi_fault := fetch.fdiBrResp.fdi_fault
       lastBranch := fetch.lastBranch
     }
     this
@@ -84,7 +86,7 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
     cf.exceptionVec := 0.U.asTypeOf(ExceptionVec())
     cf.exceptionVec(instrPageFault) := ipf
     cf.exceptionVec(instrAccessFault) := acf
-    cf.exceptionVec(fdiUJumpFault) := fdiBrFault === FDICheckFault.UJumpFDIFault
+    cf.exceptionVec(fdiUCheckFault) := fdiBrResp.fdi_fault === FDIFaultReason.JumpFDIFault && fdiBrResp.mode === ModeU
     cf.trigger := triggered
     cf.pd := pd
     cf.pred_taken := pred_taken
@@ -97,7 +99,8 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
     cf.ftqPtr := ftqPtr
     cf.ftqOffset := ftqOffset
     cf.fdiUntrusted := fdiUntrusted
-    cf.lastBranch.valid := fdiBrFault =/= FDICheckFault.noFDIFault
+    cf.fdiFaultReason := fdiBrResp.fdi_fault
+    cf.lastBranch.valid := fdiBrResp.fdi_fault =/= FDIFaultReason.noFDIFault
     cf.lastBranch.bits := lastBranch
     cf
   }

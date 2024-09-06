@@ -30,6 +30,7 @@ import xiangshan.backend.issue.{RSFeedback, RSFeedbackType, RsIdx}
 import xiangshan.cache._
 import xiangshan.cache.mmu.{TlbCmd, TlbReq, TlbRequestIO, TlbResp}
 import xs.utils.perf.HasPerfLogging
+import xiangshan.backend.execute.fu.csr.HasCSRConst
 
 class LoadToLsqIO(implicit p: Parameters) extends XSBundle {
   val loadIn = ValidIO(new LqWriteBundle)
@@ -240,7 +241,7 @@ class LoadUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging{
   //FDI check
   io.fdiReq.valid := io.out.fire //TODO: temporarily assignment
   io.fdiReq.bits.addr := io.out.bits.vaddr //TODO: need for alignment?
-  io.fdiReq.bits.inUntrustedZone := io.out.bits.uop.fdiUntrusted
+  io.fdiReq.bits.inUntrustedZone := io.out.bits.uop.cf.fdiUntrusted
   io.fdiReq.bits.operation := FDIOp.read
 
   // Generate forwardMaskFast to wake up insts earlier
@@ -289,7 +290,7 @@ class LoadUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging{
 
 // Load Pipeline Stage 2
 // DCache resp
-class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper with HasPerfLogging {
+class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper with HasPerfLogging with HasCSRConst{
   val io = IO(new Bundle() {
     val in = Flipped(Decoupled(new LsPipelineBundle))
     val out = Decoupled(new LsPipelineBundle)
@@ -330,6 +331,7 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper wi
   // if such exception happen, that inst and its exception info
   // will be force writebacked to rob
   val s2_exception_vec = WireInit(io.in.bits.uop.cf.exceptionVec)
+  val s2_exception_ffreason = WireInit(io.in.bits.uop.cf.fdiFaultReason)
   s2_exception_vec(loadAccessFault) := (io.in.bits.uop.cf.exceptionVec(loadAccessFault) || pmp.ld) && EnableMem
   // soft prefetch will not trigger any exception (but ecc error interrupt may be triggered)
   when (s2_is_prefetch) {
@@ -337,8 +339,11 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper wi
   }
   val s2_exception = Mux(EnableMem, ExceptionNO.selectByFu(s2_exception_vec, lduCfg).asUInt.orR,false.B)
 
-  //FDI load access fault
-  s2_exception_vec(fdiULoadAccessFault) := io.fdiResp.fdi_fault === FDICheckFault.UReadFDIFault
+  //FDI load access fault  
+  when (io.fdiResp.fdi_fault > io.in.bits.uop.cf.fdiFaultReason) { // FDIFaultReason.LoadFDIFault
+    s2_exception_vec(fdiUCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiUCheckFault) || io.fdiResp.mode === ModeU
+    s2_exception_ffreason := io.fdiResp.fdi_fault
+  }
 
   // writeback access fault caused by ecc error / bus error
   //
@@ -459,7 +464,7 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper wi
   io.out.bits.mmio := s2_mmio && EnableMem
   io.out.bits.uop.ctrl.flushPipe := false.B  ///flushPipe logic is useless
   io.out.bits.uop.cf.exceptionVec := s2_exception_vec // cache error not included
-
+  io.out.bits.uop.cf.fdiFaultReason := s2_exception_ffreason
   // For timing reasons, sometimes we can not let
   // io.out.bits.miss := s2_cache_miss && !s2_exception && !fullForward
   // We use io.dataForwarded instead. It means:

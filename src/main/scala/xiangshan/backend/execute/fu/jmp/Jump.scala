@@ -22,7 +22,6 @@ import chisel3.util._
 import xiangshan.backend.decode.ImmUnion
 import xiangshan.backend.execute.fu.{FUWithRedirect}
 import xiangshan.{FuOpType, RedirectLevel, XSModule}
-import xiangshan.ExceptionNO.{fdiUJumpFault, illegalInstr}
 import xiangshan._
 import xs.utils.{ParallelMux, SignExt}
 

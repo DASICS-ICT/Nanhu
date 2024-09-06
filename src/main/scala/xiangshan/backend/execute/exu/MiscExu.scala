@@ -21,7 +21,6 @@ package xiangshan.backend.execute.exu
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
-import xiangshan.ExceptionNO.fdiUJumpFault
 import xiangshan.backend.execute.fu.csr.{CSR, CSRFileIO, CSROpType}
 import xiangshan.backend.execute.fu.fence.{SfenceBundle, _}
 import xiangshan.backend.execute.fu.jmp._

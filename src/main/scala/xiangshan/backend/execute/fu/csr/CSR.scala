@@ -32,6 +32,8 @@ import xiangshan.backend.execute.fu._
 import xiangshan.backend.execute.fu.csr.vcsr._
 import xiangshan.backend.execute.fu.FuOutput
 import xiangshan.cache._
+import xiangshan.backend.execute.fu.FDIFaultReason
+import freechips.rocketchip.tile.XLen
 
 // Trigger Tdata1 bundles
 trait HasTriggerConst {
@@ -132,7 +134,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     io.in.bits.src(0),
     io.in.bits.uop.ctrl.imm,
     io.in.bits.uop.ctrl.fuOpType,
-    io.in.bits.uop.fdiUntrusted
+    io.in.bits.uop.cf.fdiUntrusted
   )
 
   val csrr_sc_ignoreW = (uopIn.ctrl.fuOpType === CSROpType.set || uopIn.ctrl.fuOpType === CSROpType.clr) && (uopIn.psrc(0) === 0.U)
@@ -350,7 +352,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   // FDI Mapping
   val fdiMainCfg: UInt = RegInit(UInt(XLEN.W), 0.U)
-  val fdiUMainCfgMask: UInt = "h2".U(XLEN.W)
+  val fdiUMainCfgMask: UInt = "h3e".U(XLEN.W)
   val fdiUMainBoundLo, fdiUMainBoundHi = RegInit(UInt(XLEN.W), 0.U)
 
   val fdiCfg = Wire(new FDIMainCfg())
@@ -359,6 +361,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   val fdiMainCallReg: UInt = RegInit(UInt(XLEN.W), 0.U)
   val fdiReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val fdiFReasonReg:  UInt = RegInit(UInt(FDIFaultWidth.W), 0.U)
   val fdiAZoneReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
   val fdiMemBoundRegs: Vec[FDIEntry] = Wire(Vec(NumFDIMemBounds, new FDIEntry()))  // just used for method parameter
   val fdiJumpBoundRegs: Vec[FDIJumpEntry] = Wire(Vec(NumFDIJumpBounds, new FDIJumpEntry()))  
@@ -372,7 +375,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     MaskedRegMap(FDIUMainBoundHi, fdiUMainBoundHi),
     MaskedRegMap(FDIMainCall, fdiMainCallReg),
     MaskedRegMap(FDIReturnPc, fdiReturnPcReg),
-    MaskedRegMap(FDIActiveZoneReturnPc, fdiAZoneReturnPcReg)
+    MaskedRegMap(FDIActiveZoneReturnPc, fdiAZoneReturnPcReg),
+    MaskedRegMap(FDIFReason, fdiFReasonReg)
   )
 
   val spmpSwitch = RegInit(0.U(XLEN.W))
@@ -783,7 +787,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     //--- Machine Trap Setup ---
     MaskedRegMap(Mstatus, mstatus, mstatusWMask, mstatusUpdateSideEffect, mstatusMask),
     MaskedRegMap(Misa, misa, 0.U, MaskedRegMap.Unwritable), // now whole misa is unchangeable
-    MaskedRegMap(Medeleg, medeleg, "hff00b3ff".U(XLEN.W)),
+    MaskedRegMap(Medeleg, medeleg, "h300b3ff".U(XLEN.W)),
     MaskedRegMap(Mideleg, mideleg, "h333".U(XLEN.W)),
     MaskedRegMap(Mie, mie, "hbbb".U(XLEN.W)),
     MaskedRegMap(Mtvec, mtvec, mtvecMask, MaskedRegMap.NoSideEffect, mtvecMask),
@@ -887,7 +891,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
                    (addr >= Uscratch.U) && (addr <= Utimer.U)
 
   val addrInFDI =  (addr >= FDIUMainCfg.U) && (addr <= FDIUMainBoundHi.U) || 
-    (addr >= FDIMainCall.U) && (addr <= FDIActiveZoneReturnPc.U) ||
+    (addr >= FDIMainCall.U) && (addr <= FDIFReason.U) ||
     (addr >= FDILibBoundBase.U) && (addr < (FDILibBoundBase + NumFDIMemBounds * 2).U) || 
     (addr >= FDIJmpBoundBase.U) && (addr <= FDIJmpCfgBase.U) || 
     addr === FDILibCfgBase.U
@@ -925,7 +929,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrio.customCtrl.distribute_csr.w.valid := wen && permitted
   csrio.customCtrl.distribute_csr.w.bits.data := wdata
   csrio.customCtrl.distribute_csr.w.bits.addr := addr
-
+  csrio.customCtrl.mode := priviledgeMode
   // Fix Mip/Sip/Uip write
   val fixMapping = Map(
     MaskedRegMap(Mip, mipReg.asUInt, mipFixMask),
@@ -1122,13 +1126,19 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall && !isUntrusted
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall && (!isUntrusted || isUntrusted && fdiCfg.closeUEcallFault)
-  csrExceptionVec(fdiUEcallAccessFault) := priviledgeMode === ModeU && io.in.valid && isEcall && isUntrusted && !fdiCfg.closeUEcallFault
+
+  // handle fdi ecall fault  
+  val hasFDIUEcallFault = priviledgeMode === ModeU && io.in.valid && isEcall && isUntrusted && !fdiCfg.closeUEcallFault
+  csrExceptionVec(fdiUCheckFault) := cfIn.exceptionVec(fdiUCheckFault) || hasFDIUEcallFault
 
   // Trigger an illegal instr exception when:
   // * unimplemented csr is being read/written
   // * csr access is illegal
   csrExceptionVec(illegalInstr) := isIllegalAddr || isIllegalAccess || isIllegalPrivOp
+
   cfOut.exceptionVec := csrExceptionVec
+  cfOut.fdiFaultReason :=   Mux(hasFDIUEcallFault && cfIn.fdiFaultReason < FDIFaultReason.EcallFDIFault,
+                                 FDIFaultReason.EcallFDIFault, cfIn.fdiFaultReason)
 
   XSDebug(io.in.valid, s"Debug Mode: an Ebreak is executed, ebreak cause enter-debug-mode exception ? ${raiseDebugException}\n")
 
@@ -1197,6 +1207,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   // exceptions from rob need to handle
   val exceptionVecFromRob   = csrio.exception.bits.uop.cf.exceptionVec
+  val fdiFaultReasonFromRob = csrio.exception.bits.uop.cf.fdiFaultReason
   val hasException          = csrio.exception.valid && !csrio.exception.bits.isInterrupt
   val hasInstrPageFault     = hasException && exceptionVecFromRob(instrPageFault)
   val hasLoadPageFault      = hasException && exceptionVecFromRob(loadPageFault)
@@ -1207,11 +1218,14 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val hasLoadAccessFault    = hasException && exceptionVecFromRob(loadAccessFault)
   val hasStoreAccessFault   = hasException && exceptionVecFromRob(storeAccessFault)
   val hasBreakPoint         = hasException && exceptionVecFromRob(breakPoint)
-  val hasFdiULoadFault      = hasException && exceptionVecFromRob(fdiULoadAccessFault)
-  val hasFdiUStoreFault     = hasException && exceptionVecFromRob(fdiUStoreAccessFault)
-  val hasFdiUJumpFault      = hasException && exceptionVecFromRob(fdiUJumpFault)
+  val hasFdiUCheckFault     = hasException && exceptionVecFromRob(fdiUCheckFault)
+  val hasFdiULoadFault      = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadFDIFault
+  val hasFdiUStoreFault     = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreFDIFault
+  val hasFdiUJumpFault      = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault
     // interrupt and fdi jump both occurs
-  val hasFdiJumpIntr        = hasIntr && exceptionVecFromRob(fdiUJumpFault)
+  val hasFdiJumpIntr        = (hasIntr && 
+                               exceptionVecFromRob(fdiUCheckFault) && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault)
+
   val hasSingleStep         = hasException && csrio.exception.bits.uop.ctrl.singleStep
   val hasTriggerFire        = hasException && csrio.exception.bits.uop.cf.trigger.canFire
   val triggerFrontendHitVec = csrio.exception.bits.uop.cf.trigger.frontendHit
@@ -1404,6 +1418,11 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   XSDebug(hasExceptionIntr && delegS, "sepc is writen!!! pc:%x\n", cfIn.pc)
 
+  // save fault reason in FDIFReason Reg (from CF / from ROB)
+  when (hasFdiUCheckFault){
+    fdiFReasonReg := fdiFaultReasonFromRob
+  }
+
   // Distributed CSR update req
   //
   // For now we use it to implement customized cache op
@@ -1491,7 +1510,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     difftestCSR.sideleg := sideleg
     difftestCSR.medeleg := medeleg
     difftestCSR.sedeleg := sedeleg
-    difftestCSR.fdiMainCfg := fdiMainCfg & fdiUMainCfgMask
+    difftestCSR.fdiMainCfg := fdiMainCfg
     difftestCSR.fdiUMBoundLo := fdiUMainBoundLo
     difftestCSR.fdiUMBoundHi := fdiUMainBoundHi
     difftestCSR.fdiLibCfg := ZeroExt(VecInit(fdiMemBoundRegs.map(_.cfg)).asUInt, XLEN)
@@ -1507,6 +1526,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     difftestCSR.fdiMainCall := fdiMainCallReg
     difftestCSR.fdiReturnPC := fdiReturnPcReg
     difftestCSR.fdiAZoneReturnPC := fdiAZoneReturnPcReg
+    difftestCSR.fdiFReason  := fdiFReasonReg
   }
 
   if(env.AlwaysBasicDiff || env.EnableDifftest) {

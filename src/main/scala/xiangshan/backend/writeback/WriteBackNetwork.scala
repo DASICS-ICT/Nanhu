@@ -25,10 +25,12 @@ import chisel3.util._
 import xiangshan.backend.execute.exu.ExuType
 import freechips.rocketchip.diplomacy._
 import xiangshan.{ExuOutput, HasXSParameter, MemPredUpdateReq, Redirect, XSCoreParamsKey}
-import xiangshan.ExceptionNO.{fdiUJumpFault}
+import xiangshan.ExceptionNO.{fdiUCheckFault}
 import xiangshan.frontend.Ftq_RF_Components
 import difftest._
 import xs.utils.GTimer
+import xiangshan.backend.execute.fu.FDIFaultReason
+
 
 class WriteBackNetwork(implicit p:Parameters) extends LazyModule {
   val node = new WriteBackNetworkNode
@@ -79,7 +81,10 @@ class WriteBackNetworkImp(outer:WriteBackNetwork)(implicit p:Parameters) extends
     res.valid := RegNext(validCond, false.B)
     res.bits := RegEnable(realIn.bits, realIn.valid)
     if (latency == 1){
-      res.bits.uop.cf.exceptionVec(fdiUJumpFault):= realIn.bits.uop.cf.exceptionVec(fdiUJumpFault)
+        when (realIn.bits.uop.cf.fdiFaultReason === FDIFaultReason.JumpFDIFault) {
+          res.bits.uop.cf.exceptionVec(fdiUCheckFault) := realIn.bits.uop.cf.exceptionVec(fdiUCheckFault)
+          res.bits.uop.cf.fdiFaultReason := realIn.bits.uop.cf.fdiFaultReason
+      }
     }
     res.bits.redirectValid := RegNext(realIn.bits.redirectValid && !realIn.bits.redirect.robIdx.needFlush(localRedirectReg), false.B)
     res.bits.redirect := RegEnable(realIn.bits.redirect, realIn.bits.redirectValid)

@@ -126,7 +126,7 @@ class FetchToIBuffer(implicit p: Parameters) extends XSBundle {
   val triggered    = Vec(PredictWidth, new TriggerCf)
   val mmioFetch = Bool()
   val fdiUntrusted = Vec(PredictWidth, Bool())
-  val fdiBrFault: UInt = FDICheckFault()  // last branch to this instr block is illegal
+  val fdiBrResp = new FDIRespDataBundle  // last branch to this instr block is illegal
   val lastBranch: UInt = UInt(VAddrBits.W)
 }
 

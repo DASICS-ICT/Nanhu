@@ -40,8 +40,10 @@ import xiangshan.frontend.AllAheadFoldedHistoryOldestBits
 import xs.utils.DataChanged
 import xiangshan.vector._
 import xiangshan.vector.writeback.VmbPtr
-
+import xiangshan.backend.execute.fu.FDIFaultReason
 import scala.math.max
+import xiangshan.backend.execute.fu.FDIConst
+import xiangshan.backend.execute.fu.csr.HasCSRConst
 
 class ValidUndirectioned[T <: Data](gen: T) extends Bundle {
   val valid = Bool()
@@ -97,7 +99,7 @@ class CfiUpdateInfo(implicit p: Parameters) extends XSBundle with HasBPUParamete
 }
 
 // Dequeue DecodeWidth insts from Ibuffer
-class CtrlFlow(implicit p: Parameters) extends XSBundle {
+class CtrlFlow(implicit p: Parameters) extends XSBundle with FDIConst {
   val instr = UInt(32.W)
   val pc = UInt(VAddrBits.W)
   val foldpc = UInt(MemPredPCWidth.W)
@@ -119,6 +121,8 @@ class CtrlFlow(implicit p: Parameters) extends XSBundle {
   val ftqOffset = UInt(log2Up(PredictWidth).W)
   // needs to be checked by FDI
   val fdiUntrusted = Bool()
+  // FDI Exception Reason
+  val fdiFaultReason = UInt(FDIFaultWidth.W) 
   // info of branch fault by last branch
   val lastBranch = ValidUndirectioned(UInt(VAddrBits.W))
   //vector
@@ -180,7 +184,7 @@ class CtrlSignals(implicit p: Parameters) extends XSBundle {
 
 }
 
-class CfCtrl(implicit p: Parameters) extends XSBundle {
+class CfCtrl(implicit p: Parameters) extends XSBundle{
   val cf = new CtrlFlow
   val ctrl = new CtrlSignals
   val vCsrInfo = new VICsrInfo
@@ -207,7 +211,7 @@ class LSIdx(implicit p: Parameters) extends XSBundle {
 }
 
 // CfCtrl -> MicroOp at Rename Stage
-class MicroOp(implicit p: Parameters) extends CfCtrl {
+class MicroOp(implicit p: Parameters) extends CfCtrl{
   val srcState = Vec(3, SrcState())
   val psrc = Vec(3, UInt(PhyRegIdxWidth.W))
   val pdest = UInt(PhyRegIdxWidth.W)
@@ -232,9 +236,6 @@ class MicroOp(implicit p: Parameters) extends CfCtrl {
   val vtypeRegIdx = UInt(log2Ceil(VIVtypeRegsNum).W)
   val segIdx = UInt(log2Ceil(VLEN).W)
   val elmIdx = UInt(3.W)
-
-  //FDI
-  val fdiUntrusted = Bool()
 
   def clearExceptions(
     exceptionBits: Seq[Int] = Seq(),
@@ -522,6 +523,8 @@ class CustomCSRCtrlIO(implicit p: Parameters) extends XSBundle {
 
   // distribute csr write signal
   val distribute_csr = new DistributedCSRIO()
+  // csr mode register
+  val mode = Output(UInt(2.W))
   // TODO: move it to a new bundle, since single step is not a custom control signal
   val singlestep = Output(Bool())
   val frontend_trigger = new FrontendTdataDistributeIO()

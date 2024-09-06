@@ -116,10 +116,9 @@ class FrontendImp (outer: Frontend) extends LazyModuleImp(outer)
   // FDITagger
   val fdiTagger: FDITagger = Module(new FDITagger())
   fdiTagger.io.distribute_csr := csrCtrl.distribute_csr
-  fdiTagger.io.privMode := tlbCsr.priv.imode
+  fdiTagger.io.mode := tlbCsr.priv.imode
   fdiTagger.io.addr := ifu.io.fdi.startAddr
   ifu.io.fdi.notTrusted := fdiTagger.io.notTrusted
-
   // fdi branch checker
   val fdiBrChecker: FDIBranchChecker = Module(new FDIBranchChecker())
   fdiBrChecker.io.distribute_csr := csrCtrl.distribute_csr
@@ -127,8 +126,7 @@ class FrontendImp (outer: Frontend) extends LazyModuleImp(outer)
   fdiBrChecker.io.valid := ifu.io.fdi.lastBranch.valid
   fdiBrChecker.io.lastBranch := ifu.io.fdi.lastBranch.bits
   fdiBrChecker.io.target := ifu.io.fdi.startAddr
-  ifu.io.fdi.brResp := fdiBrChecker.io.resp.fdi_fault
-
+  ifu.io.fdi.resp := fdiBrChecker.io.resp
 
   // val tlb_req_arb     = Module(new Arbiter(new TlbReq, 2))
   // tlb_req_arb.io.in(0) <> ifu.io.iTLBInter.req
