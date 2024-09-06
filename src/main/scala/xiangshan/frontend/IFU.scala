@@ -26,7 +26,8 @@ import xiangshan.frontend.icache._
 import utils._
 import xs.utils._
 import xs.utils.perf.HasPerfLogging
-import xiangshan.backend.execute.fu.{PMPReqBundle, PMPRespBundle, FDICheckFault}
+import xiangshan.backend.execute.fu.{PMPReqBundle, PMPRespBundle, FDIFaultReason}
+import xiangshan.backend.execute.fu.{FDIRespBundle, FDIRespDataBundle}
 
 trait HasInstrMMIOConst extends HasXSParameter with HasIFUConst{
   def mmioBusWidth = 64
@@ -64,7 +65,7 @@ class IFUFDIIO(implicit p: Parameters) extends XSBundle {
   val notTrusted: Vec[Bool] = Input(Vec(FetchWidth * 2, Bool()))
   // for branch checker
   val lastBranch = ValidIO(UInt(VAddrBits.W))
-  val brResp: UInt = Input(FDICheckFault())
+  val resp = Flipped(new FDIRespBundle)
 }
 
 class NewIFUIO(implicit p: Parameters) extends XSBundle {
@@ -224,7 +225,9 @@ class NewIFU(implicit p: Parameters) extends XSModule
   // for branch checker
   io.fdi.lastBranch.valid := f1_ftq_req.lastBranch.valid
   io.fdi.lastBranch.bits := f1_ftq_req.lastBranch.bits
-  val f1_fdi_br_fault: UInt = io.fdi.brResp
+  val f1_fdi_br_resp = Wire(new FDIRespDataBundle)
+    f1_fdi_br_resp.fdi_fault := io.fdi.resp.fdi_fault
+    f1_fdi_br_resp.mode := io.fdi.resp.mode
   /**
     ******************************************************************************
     * IFU Stage 2
@@ -280,7 +283,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
   val f2_resend_vaddr     = RegEnable(f1_ftq_req.startAddr + 2.U, f1_fire)
 
   val f2_fdi_tag       = RegEnable(f1_fdi_tag, f1_fire)
-  val f2_fdi_br_fault  = RegEnable(f1_fdi_br_fault, f1_fire)
+  val f2_fdi_br_resp  = RegEnable(f1_fdi_br_resp, f1_fire)
 
   def isNextLine(pc: UInt, startAddr: UInt) = {
     startAddr(blockOffBits) ^ pc(blockOffBits)
@@ -406,7 +409,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
   val f3_pAddrs   = RegEnable(f2_paddrs, f2_fire)
   val f3_resend_vaddr   = RegEnable(f2_resend_vaddr, f2_fire)
   val f3_fdi_tag     = RegEnable(f2_fdi_tag, f2_fire)
-  val f3_fdi_br_fault = RegEnable(f2_fdi_br_fault, f2_fire)
+  val f3_fdi_br_resp = RegEnable(f2_fdi_br_resp, f2_fire)
   when(f3_valid && !f3_ftq_req.ftqOffset.valid){
     assert(f3_ftq_req.startAddr + 32.U >= f3_ftq_req.nextStartAddr , "More tha 32 Bytes fetch is not allowed!")
   }
@@ -636,7 +639,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
   io.toIbuffer.bits.triggered   := f3_triggered
   io.toIbuffer.bits.mmioFetch   := false.B
   io.toIbuffer.bits.fdiUntrusted := f3_fdi_tag
-  io.toIbuffer.bits.fdiBrFault := f3_fdi_br_fault
+  io.toIbuffer.bits.fdiBrResp  := f3_fdi_br_resp
   io.toIbuffer.bits.lastBranch := f3_ftq_req.lastBranch.bits
 
   when(f3_lastHalf.valid){

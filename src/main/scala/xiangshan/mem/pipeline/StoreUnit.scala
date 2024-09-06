@@ -28,6 +28,7 @@ import xiangshan.backend.execute.fu._
 import xiangshan.backend.issue.{RSFeedback, RSFeedbackType, RsIdx}
 import xiangshan.cache.mmu.{TlbCmd, TlbReq, TlbRequestIO, TlbResp}
 import xs.utils.perf.HasPerfLogging
+import xiangshan.backend.execute.fu.csr.HasCSRConst
 
 // Store Pipeline Stage 0
 // Generate addr, use addr to query DCache and DTLB
@@ -122,7 +123,7 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging 
   //FDI check
   io.fdiReq.valid := io.out.fire  //TODO: temporarily assignment
   io.fdiReq.bits.addr := io.out.bits.vaddr //TODO: need for alignment?
-  io.fdiReq.bits.inUntrustedZone := io.out.bits.uop.fdiUntrusted
+  io.fdiReq.bits.inUntrustedZone := io.out.bits.uop.cf.fdiUntrusted
   io.fdiReq.bits.operation := FDIOp.write
 
   io.in.ready := true.B
@@ -166,7 +167,7 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging 
   XSPerfAccumulate("tlb_miss_first_issue", io.in.fire && s1_tlb_miss && io.in.bits.isFirstIssue)
 }
 
-class StoreUnit_S2(implicit p: Parameters) extends XSModule {
+class StoreUnit_S2(implicit p: Parameters) extends XSModule with HasCSRConst{
   val io = IO(new Bundle() {
     val in = Flipped(Decoupled(new LsPipelineBundle))
     val pmpResp = Flipped(new PMPRespBundle)
@@ -193,7 +194,10 @@ class StoreUnit_S2(implicit p: Parameters) extends XSModule {
   io.out.valid := io.in.valid && (!is_mmio || s2_exception)
 
   //FDI store access fault
-  io.out.bits.uop.cf.exceptionVec(fdiUStoreAccessFault) := io.fdiResp.fdi_fault === FDICheckFault.UWriteFDIFault
+  when (io.fdiResp.fdi_fault > io.in.bits.uop.cf.fdiFaultReason) { // FDIFaultReason.StoreFDIFault
+    io.out.bits.uop.cf.exceptionVec(fdiUCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiUCheckFault) || io.fdiResp.mode === ModeU
+    io.out.bits.uop.cf.fdiFaultReason := io.fdiResp.fdi_fault
+  }
 }
 
 class StoreUnit_S3(implicit p: Parameters) extends XSModule {

@@ -73,7 +73,8 @@ trait HasCSRConst {
   val FDIMainCall  = 0x8b0
   val FDIReturnPc  = 0x8b1
   val FDIActiveZoneReturnPc = 0x8b2
-
+  val FDIFReason   = 0x8b3
+  
   val FDIJmpCfgBase = 0x8c8
   val FDIJmpBoundBase = 0x8c0
 
@@ -214,6 +215,11 @@ trait HasCSRConst {
   val Mhpmevent29   = 0x33D
   val Mhpmevent30   = 0x33E
   val Mhpmevent31   = 0x33F
+
+  // Machine DASICS Settings (for Supervisor protection)
+  val FDISMainCfg = 0xBC0
+  val FDISMainBoundLo = 0xBC2
+  val FDISMainBoundHi = 0xBC3
 
   // Debug/Trace Registers (shared with Debug Mode) (not implemented)
 

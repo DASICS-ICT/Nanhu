@@ -371,6 +371,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
   io.exception.bits.uop := RegEnable(debug_deqUop, exceptionHappen && !exceptionWaitingRedirect)
   io.exception.bits.uop.ctrl.commitType := RegEnable(deqEntryData.commitType, exceptionHappen && !exceptionWaitingRedirect)
   io.exception.bits.uop.cf.exceptionVec := RegEnable(exceptionDataRead.bits.exceptionVec, exceptionHappen && !exceptionWaitingRedirect)
+  io.exception.bits.uop.cf.fdiFaultReason := RegEnable(exceptionDataRead.bits.fdiFaultReason, exceptionHappen && !exceptionWaitingRedirect)
   io.exception.bits.uop.ctrl.singleStep := RegEnable(exceptionDataRead.bits.singleStep, exceptionHappen && !exceptionWaitingRedirect)
   io.exception.bits.uop.cf.crossPageIPFFix := RegEnable(exceptionDataRead.bits.crossPageIPFFix, exceptionHappen && !exceptionWaitingRedirect)
   io.exception.bits.isInterrupt := RegEnable(intrEnable, exceptionHappen && !exceptionWaitingRedirect)
@@ -863,6 +864,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
     exceptionGen.io.enq(i).valid := canEnqueue(i)
     exceptionGen.io.enq(i).bits.robIdx := io.enq.req(i).bits.robIdx
     exceptionGen.io.enq(i).bits.exceptionVec := ExceptionNO.selectFrontend(io.enq.req(i).bits.cf.exceptionVec)
+    exceptionGen.io.enq(i).bits.fdiFaultReason := io.enq.req(i).bits.cf.fdiFaultReason
     XSError(canEnqueue(i) && io.enq.req(i).bits.ctrl.replayInst, "enq should not set replayInst")
     exceptionGen.io.enq(i).bits.singleStep := io.enq.req(i).bits.ctrl.singleStep
     exceptionGen.io.enq(i).bits.crossPageIPFFix := io.enq.req(i).bits.cf.crossPageIPFFix
@@ -881,6 +883,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
       exc_wb.bits.robIdx := wb.bits.uop.robIdx
       exc_wb.bits.exceptionVec := ExceptionNO.selectByExu(wb.bits.uop.cf.exceptionVec, wbWithException(i)._1)
       exc_wb.bits.singleStep := false.B
+      exc_wb.bits.fdiFaultReason := wb.bits.uop.cf.fdiFaultReason
       exc_wb.bits.crossPageIPFFix := false.B
       // TODO: make trigger configurable
       exc_wb.bits.trigger.clear() // Don't care frontend timing, chain, hit and canFire
@@ -895,6 +898,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
       exc_wb.valid := wb.valid
       exc_wb.bits.robIdx := wb.bits.uop.robIdx
       exc_wb.bits.exceptionVec := wb.bits.uop.cf.exceptionVec
+      exc_wb.bits.fdiFaultReason := wb.bits.uop.cf.fdiFaultReason
       exc_wb.bits.singleStep := false.B
       exc_wb.bits.crossPageIPFFix := false.B
       exc_wb.bits.trigger.clear()

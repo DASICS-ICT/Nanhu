@@ -25,9 +25,12 @@ import chisel3.util._
 import xiangshan.backend.execute.exu.ExuType
 import freechips.rocketchip.diplomacy._
 import xiangshan.{ExuOutput, HasXSParameter, MemPredUpdateReq, Redirect, XSCoreParamsKey}
+import xiangshan.ExceptionNO.{fdiUCheckFault}
 import xiangshan.frontend.Ftq_RF_Components
 import difftest._
 import xs.utils.GTimer
+import xiangshan.backend.execute.fu.FDIFaultReason
+
 
 class WriteBackNetwork(implicit p:Parameters) extends LazyModule {
   val node = new WriteBackNetworkNode
@@ -65,6 +68,24 @@ class WriteBackNetworkImp(outer:WriteBackNetwork)(implicit p:Parameters) extends
     val validCond = realIn.valid && !realIn.bits.uop.robIdx.needFlush(localRedirectReg)
     res.valid := RegNext(validCond, false.B)
     res.bits := RegEnable(realIn.bits, realIn.valid)
+    res.bits.redirectValid := RegNext(realIn.bits.redirectValid && !realIn.bits.redirect.robIdx.needFlush(localRedirectReg), false.B)
+    res.bits.redirect := RegEnable(realIn.bits.redirect, realIn.bits.redirectValid)
+    res
+  }
+  
+  private def PipeWithRedirectDelayFDI(in: Valid[ExuOutput], latency: Int, p: Parameters): Valid[ExuOutput] = {
+    require(latency > 0)
+    val res = Wire(Valid(new ExuOutput()(p)))
+    val realIn = if (latency == 1) in else PipeWithRedirectDelayFDI(in, latency - 1, p)
+    val validCond = realIn.valid && !realIn.bits.uop.robIdx.needFlush(localRedirectReg)
+    res.valid := RegNext(validCond, false.B)
+    res.bits := RegEnable(realIn.bits, realIn.valid)
+    if (latency == 1){
+        when (realIn.bits.uop.cf.fdiFaultReason === FDIFaultReason.JumpFDIFault) {
+          res.bits.uop.cf.exceptionVec(fdiUCheckFault) := realIn.bits.uop.cf.exceptionVec(fdiUCheckFault)
+          res.bits.uop.cf.fdiFaultReason := realIn.bits.uop.cf.fdiFaultReason
+      }
+    }
     res.bits.redirectValid := RegNext(realIn.bits.redirectValid && !realIn.bits.redirect.robIdx.needFlush(localRedirectReg), false.B)
     res.bits.redirect := RegEnable(realIn.bits.redirect, realIn.bits.redirectValid)
     res

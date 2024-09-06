@@ -27,7 +27,6 @@ import chisel3.util._
 import xiangshan.{ExuInput, ExuOutput, XSCoreParamsKey}
 import xiangshan.backend.execute.exu.FenceIO
 import xiangshan.backend.execute.fu.csr.CSRFileIO
-import xiangshan.ExceptionNO.fdiUJumpFault
 
 class IntegerBlock(implicit p:Parameters) extends BasicExuBlock {
   require(miscNum == 1)
