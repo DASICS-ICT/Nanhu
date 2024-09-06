@@ -360,6 +360,7 @@ class PTWImp(outer: PTW)(implicit p: Parameters) extends PtwModule(outer) with H
     val ptw_resp = Wire(new PtwResp())
     ptw_resp.entry.ppn := pte_in.ppn
     ptw_resp.entry.level.map(_ := 2.U)
+    ptw_resp.entry.pkey.map(_ := pte_in.pkey)
     ptw_resp.entry.perm.map(_ := pte_in.getPerm())
     ptw_resp.entry.tag := vpn
     ptw_resp.pf := (if (af_first) !af else true.B) && pte_in.isPf(2.U)
@@ -465,6 +466,7 @@ class FakePTW()(implicit p: Parameters) extends XSModule with HasPtwConst {
     assert(!io.tlb(i).resp.valid || io.tlb(i).resp.ready)
     io.tlb(i).resp.bits.entry.tag := RegNext(io.tlb(i).req(0).bits.vpn)
     io.tlb(i).resp.bits.entry.ppn := pte.ppn
+    io.tlb(i).resp.bits.entry.pkey.map(_ := pte.pkey)
     io.tlb(i).resp.bits.entry.perm.map(_ := pte.getPerm())
     io.tlb(i).resp.bits.entry.level.map(_ := level)
     io.tlb(i).resp.bits.pf := pf

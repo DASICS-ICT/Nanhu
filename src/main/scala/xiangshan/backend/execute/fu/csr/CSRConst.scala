@@ -77,6 +77,8 @@ trait HasCSRConst {
   
   val FDIJmpCfgBase = 0x8c8
   val FDIJmpBoundBase = 0x8c0
+  // User-Level MPK Register
+  val Upkru         = 0x800
 
   // Supervisor Trap Setup
   val Sstatus       = 0x100
@@ -104,6 +106,12 @@ trait HasCSRConst {
   val Srnctl        = 0x5C4
   /** 0x5C5-0x5D9 for cache instruction register*/
   val Scachebase    = 0x5C5
+
+  // Supervisor MPK Registers
+  val Spkctl        = 0x9c0
+  val Spkrs         = 0x9c1
+
+  /** 0x5C5-0x5E5 for cache instruction register*/
 
   val Sdsid         = 0x9C0
   val Sfetchctl     = 0x9E0

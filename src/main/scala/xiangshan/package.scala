@@ -331,7 +331,6 @@ package object xiangshan {
     def storePageFault      = 15
 
     //exception 16-23 is reserve
-
     def FDIExcOffset = 8
     //  FDI excetption       number    offset
     def fdiUCheckFault = 24 - FDIExcOffset
@@ -345,6 +344,10 @@ package object xiangshan {
     // def fdiSStoreAccessFault = 29 - FDIExcOffset
     // def fdiUEcallAccessFault = 30 - FDIExcOffset
     // def fdiSEcallAccessFault = 31 - FDIExcOffset
+    // def pkuLoadPageFault    = 32 - FDIExcOffset
+    // def pkuStorePageFault   = 33 - FDIExcOffset
+    // def pksLoadPageFault    = 34 - FDIExcOffset
+    // def pksStorePageFault   = 35 - FDIExcOffset
 
     def priorities = Seq(
       // FDI Instruction fault actually belongs to the last branch instr

@@ -37,15 +37,17 @@ class PageCachePerPespBundle(implicit p: Parameters) extends PtwBundle {
   val hit = Bool()
   val pre = Bool()
   val ppn = UInt(ppnLen.W)
+  val pkey = UInt(pkeyLen.W)
   val perm = new PtePermBundle()
   val ecc = Bool()
   val level = UInt(2.W)
   val v = Bool()
 
-  def apply(hit: Bool, pre: Bool, ppn: UInt, perm: PtePermBundle = 0.U.asTypeOf(new PtePermBundle()),
+  def apply(hit: Bool, pre: Bool, ppn: UInt, pkey: UInt = 0.U(pkeyLen.W), perm: PtePermBundle = 0.U.asTypeOf(new PtePermBundle()),
             ecc: Bool = false.B, level: UInt = 0.U, valid: Bool = true.B) {
     this.hit := hit && !ecc
     this.pre := pre
+    this.pkey := pkey
     this.ppn := ppn
     this.perm := perm
     this.ecc := ecc && hit
@@ -362,6 +364,7 @@ class PtwCache(parentName:String = "Unknown")(implicit p: Parameters) extends XS
   }
   val l3HitPPN = l3HitData.ppns(genPtwL3SectorIdx(stageCheck(0).bits.req_info.vpn))
   val l3HitPerm = l3HitData.perms.getOrElse(0.U.asTypeOf(Vec(PtwL3SectorSize, new PtePermBundle)))(genPtwL3SectorIdx(stageCheck(0).bits.req_info.vpn))
+  val l3HitPkey = l3HitData.pkeys.getOrElse(0.U.asTypeOf(Vec(PtwL3SectorSize, UInt(pkeyLen.W))))(genPtwL3SectorIdx(stageCheck(0).bits.req_info.vpn))
   val l3HitValid = l3HitData.vs(genPtwL3SectorIdx(stageCheck(0).bits.req_info.vpn))
 
   // super page
@@ -389,13 +392,14 @@ class PtwCache(parentName:String = "Unknown")(implicit p: Parameters) extends XS
      RegEnable(hitData.v, stageDelay(1).fire))
   }
   val spHitPerm = spHitData.perm.getOrElse(0.U.asTypeOf(new PtePermBundle))
+  val spHitPkey = spHitData.pkey.getOrElse(0.U.asTypeOf(UInt(pkeyLen.W)))
   val spHitLevel = spHitData.level.getOrElse(0.U)
 
   val check_res = Wire(new PageCacheRespBundle)
   check_res.l1.apply(l1Hit, l1Pre, l1HitPPN)
   check_res.l2.apply(l2Hit, l2Pre, l2HitPPN, ecc = l2eccError)
-  check_res.l3.apply(l3Hit, l3Pre, l3HitPPN, l3HitPerm, l3eccError, valid = l3HitValid)
-  check_res.sp.apply(spHit, spPre, spHitData.ppn, spHitPerm, false.B, spHitLevel, spValid)
+  check_res.l3.apply(l3Hit, l3Pre, l3HitPPN, l3HitPkey, l3HitPerm, l3eccError, valid = l3HitValid)
+  check_res.sp.apply(spHit, spPre, spHitData.ppn, spHitPkey, spHitPerm, false.B, spHitLevel, spValid)
 
   val resp_res = Reg(new PageCacheRespBundle)
   when (stageCheck(1).fire) { resp_res := check_res }
@@ -420,6 +424,7 @@ class PtwCache(parentName:String = "Unknown")(implicit p: Parameters) extends XS
   io.resp.bits.toTlb.asid  := io.csr_dup(0).satp.asid // DontCare
   io.resp.bits.toTlb.ppn   := Mux(resp_res.l3.hit, resp_res.l3.ppn, resp_res.sp.ppn)
   io.resp.bits.toTlb.perm.map(_ := Mux(resp_res.l3.hit, resp_res.l3.perm, resp_res.sp.perm))
+  io.resp.bits.toTlb.pkey.map(_ := Mux(resp_res.l3.hit, resp_res.l3.pkey, resp_res.sp.pkey))
   io.resp.bits.toTlb.level.map(_ := Mux(resp_res.l3.hit, 2.U, resp_res.sp.level))
   io.resp.bits.toTlb.prefetch := from_pre(stageResp.bits.req_info.source)
   io.resp.bits.toTlb.v := Mux(resp_res.sp.hit, resp_res.sp.v, resp_res.l3.v)

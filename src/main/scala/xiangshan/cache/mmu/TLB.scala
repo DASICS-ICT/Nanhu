@@ -65,6 +65,7 @@ class TLB(Width: Int, nRespDups: Int = 1, q: TLBParameters)(implicit p: Paramete
 
   val satp = csr_dup.head.satp
   val priv = csr_dup.head.priv
+  val mpk = csr_dup.head.mpk
   val ifecth = if (q.fetchi) true.B else false.B
 
   val reqAddr = req.map(_.bits.vaddr.asTypeOf(new VaBundle))
@@ -126,8 +127,8 @@ class TLB(Width: Int, nRespDups: Int = 1, q: TLBParameters)(implicit p: Paramete
 
   val refill_now = ptw_resp_v
   def TLBNormalRead(i: Int) = {
-    val (n_hit_sameCycle, normal_hit, normal_ppn, normal_perm) = normalPage.r_resp_apply(i)
-    val (s_hit_sameCycle, super_hit, super_ppn, super_perm) = superPage.r_resp_apply(i)
+    val (n_hit_sameCycle, normal_hit, normal_ppn, normal_perm, normal_pkey) = normalPage.r_resp_apply(i)
+    val (s_hit_sameCycle, super_hit, super_ppn, super_perm, super_pkey) = superPage.r_resp_apply(i)
     // assert(!(normal_hit && super_hit && vmEnable_dup(i) && RegNext(req(i).valid, init = false.B)))
 
     val hit = normal_hit || super_hit
@@ -174,6 +175,7 @@ class TLB(Width: Int, nRespDups: Int = 1, q: TLBParameters)(implicit p: Paramete
     for (d <- 0 until nRespDups) {
       val ppn = Mux(super_hit, super_ppn(0), normal_ppn(d))
       val perm = Mux(super_hit, super_perm(0), normal_perm(d))
+      val pkey = Mux(super_hit, super_pkey(0), normal_pkey(d))
 
       val pf = perm.pf
       val af = perm.af
@@ -204,6 +206,15 @@ class TLB(Width: Int, nRespDups: Int = 1, q: TLBParameters)(implicit p: Paramete
       resp(i).bits.excp(d).af.ld    := (af || (spm_v && !spm.r)) && TlbCmd.isRead(cmdReg) && fault_valid
       resp(i).bits.excp(d).af.st    := (af || (spm_v && !spm.w)) && TlbCmd.isWrite(cmdReg) && fault_valid
       resp(i).bits.excp(d).af.instr := (af || (spm_v && !spm.x)) && TlbCmd.isExec(cmdReg) && fault_valid
+
+      // Check for Memory Protection Keys
+      val pkrWd = Mux(mpk.enable, mpk.pkr((pkey << 1.U) + 1.U).asBool, false.B)
+      val pkrAd = Mux(mpk.enable, mpk.pkr((pkey << 1.U)).asBool, false.B)
+      val ldPkeyFail = !(modeCheck && !pkrAd)
+      val stPkeyFail = !(modeCheck && !pkrAd && !pkrWd)
+      resp(i).bits.excp(d).pkf.ld := ldPkeyFail && !af && !ldPf && fault_valid && (TlbCmd.isRead(cmdReg)  && !TlbCmd.isAmo(cmdReg))
+      resp(i).bits.excp(d).pkf.st := stPkeyFail && !af && !stPf && fault_valid && (TlbCmd.isWrite(cmdReg) ||  TlbCmd.isAmo(cmdReg))
+      resp(i).bits.excp(d).pkf.isUser := mode_dup(i) === ModeU
     }
 
     (hit, miss, validReg)
