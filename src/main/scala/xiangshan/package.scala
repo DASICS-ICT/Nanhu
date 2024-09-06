@@ -300,11 +300,13 @@ package object xiangshan {
     def IMM_Z  = "b0101".U
     def INVALID_INSTR = "b0110".U
     def IMM_B6 = "b1000".U
-
+    
     //vector
     def IMM_VA = "b1001".U
     def IMM_C = "b1100".U
     def IMM_CI = "b1101".U
+
+    def IMM_DIJ = "b1010".U
 
     def X      = BitPat("b????")
 
