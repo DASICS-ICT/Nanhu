@@ -351,7 +351,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   // FDI Mapping
   val fdiMainCfg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val fdiSMainCfgMask: UInt = "h3ff".U(XLEN.W)
   val fdiUMainCfgMask: UInt = "h3e".U(XLEN.W)
+  val fdiSMainBoundLo, fdiSMainBoundHi = RegInit(UInt(XLEN.W), 0.U)
   val fdiUMainBoundLo, fdiUMainBoundHi = RegInit(UInt(XLEN.W), 0.U)
 
   val fdiMainCallReg: UInt = RegInit(UInt(XLEN.W), 0.U)
@@ -365,6 +367,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   ) ++ FDIGenJumpMapping(
     jump_init = FDIMemInit, jumpCfgBase = FDIJmpCfgBase, jumpBoundBase = FDIJmpBoundBase, jumpEntries = fdiJumpBoundRegs
   ) ++ Map(
+    MaskedRegMap(FDISMainCfg, fdiMainCfg, fdiSMainCfgMask),
+    MaskedRegMap(FDISMainBoundLo, fdiSMainBoundLo),
+    MaskedRegMap(FDISMainBoundHi, fdiSMainBoundHi),
     MaskedRegMap(FDIUMainCfg, fdiMainCfg, wmask = fdiUMainCfgMask, rmask = fdiUMainCfgMask),
     MaskedRegMap(FDIUMainBoundLo, fdiUMainBoundLo),
     MaskedRegMap(FDIUMainBoundHi, fdiUMainBoundHi),
@@ -878,6 +883,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
                    (addr >= Uscratch.U) && (addr <= Utimer.U)
 
   val addrInFDI =  (addr >= FDIUMainCfg.U) && (addr <= FDIUMainBoundHi.U) || 
+    (addr >= FDISMainCfg.U) && (addr <= FDISMainBoundHi.U) ||
     (addr >= FDIMainCall.U) && (addr <= FDIFReason.U) ||
     (addr >= FDILibBoundBase.U) && (addr < (FDILibBoundBase + NumFDIMemBounds * 2).U) || 
     (addr >= FDIJmpBoundBase.U) && (addr <= FDIJmpCfgBase.U) || 
@@ -1111,12 +1117,14 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val csrExceptionVec = WireInit(cfIn.exceptionVec)
   csrExceptionVec(breakPoint) := io.in.valid && isEbreak
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
-  csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall && !isUntrusted
+  csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall && (!isUntrusted || isUntrusted && fdiCfg.closeSEcallFault)
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall && (!isUntrusted || isUntrusted && fdiCfg.closeUEcallFault)
 
   // handle fdi ecall fault  
   val hasFDIUEcallFault = priviledgeMode === ModeU && io.in.valid && isEcall && isUntrusted && !fdiCfg.closeUEcallFault
   csrExceptionVec(fdiUCheckFault) := cfIn.exceptionVec(fdiUCheckFault) || hasFDIUEcallFault
+  val hasFDISEcallFault = priviledgeMode === ModeS && io.in.valid && isEcall && isUntrusted && !fdiCfg.closeSEcallFault
+  csrExceptionVec(fdiSCheckFault) := cfIn.exceptionVec(fdiSCheckFault) || hasFDISEcallFault
 
   // Trigger an illegal instr exception when:
   // * unimplemented csr is being read/written
@@ -1124,7 +1132,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrExceptionVec(illegalInstr) := isIllegalAddr || isIllegalAccess || isIllegalPrivOp
 
   cfOut.exceptionVec := csrExceptionVec
-  cfOut.fdiFaultReason :=   Mux(hasFDIUEcallFault && cfIn.fdiFaultReason < FDIFaultReason.EcallFDIFault,
+  cfOut.fdiFaultReason :=   Mux((hasFDISEcallFault || hasFDIUEcallFault) && cfIn.fdiFaultReason < FDIFaultReason.EcallFDIFault,
                                  FDIFaultReason.EcallFDIFault, cfIn.fdiFaultReason)
 
   XSDebug(io.in.valid, s"Debug Mode: an Ebreak is executed, ebreak cause enter-debug-mode exception ? ${raiseDebugException}\n")
@@ -1205,13 +1213,18 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val hasLoadAccessFault    = hasException && exceptionVecFromRob(loadAccessFault)
   val hasStoreAccessFault   = hasException && exceptionVecFromRob(storeAccessFault)
   val hasBreakPoint         = hasException && exceptionVecFromRob(breakPoint)
+
   val hasFdiUCheckFault     = hasException && exceptionVecFromRob(fdiUCheckFault)
   val hasFdiULoadFault      = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadFDIFault
   val hasFdiUStoreFault     = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreFDIFault
   val hasFdiUJumpFault      = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault
+  val hasFdiSCheckFault     = hasException && exceptionVecFromRob(fdiSCheckFault)
+  val hasFdiSLoadFault      = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadFDIFault
+  val hasFdiSStoreFault     = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreFDIFault
+  val hasFdiSJumpFault      = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault
     // interrupt and fdi jump both occurs
   val hasFdiJumpIntr        = (hasIntr && 
-                               exceptionVecFromRob(fdiUCheckFault) && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault)
+                               (exceptionVecFromRob(fdiUCheckFault) || exceptionVecFromRob(fdiSCheckFault)) && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault)
 
   val hasSingleStep         = hasException && csrio.exception.bits.uop.ctrl.singleStep
   val hasTriggerFire        = hasException && csrio.exception.bits.uop.cf.trigger.canFire
@@ -1274,13 +1287,16 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     hasStoreAccessFault,
     hasLoadAddrMisalign,
     hasStoreAddrMisalign,
+    hasFdiSLoadFault,
+    hasFdiSStoreFault,
+    hasFdiSJumpFault,
     hasFdiULoadFault,
     hasFdiUStoreFault,
     hasFdiUJumpFault
   )).asUInt.orR
   when (RegNext(RegNext(updateTval))) {
     val tval = Mux(
-      RegNext(RegNext(hasFdiUJumpFault && csrio.exception.bits.uop.cf.lastBranch.valid)),
+      RegNext(RegNext((hasFdiUJumpFault || hasFdiSJumpFault) && csrio.exception.bits.uop.cf.lastBranch.valid)),
       RegNext(RegNext(csrio.exception.bits.uop.cf.pc)),
       Mux(
         RegNext(RegNext(hasInstrPageFault || hasInstrAccessFault)),
@@ -1302,7 +1318,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   }
 
   val debugTrapTarget = Mux(!isEbreak && debugMode, 0x38020808.U, 0x38020800.U) // 0x808 is when an exception occurs in debug mode prog buf exec
-  private val delegVecM = Mux(hasIntr, mideleg , medeleg)
+  private val delegVecM = Mux(hasIntr, mideleg, medeleg)
   private val delegVecS = Mux(hasIntr, sideleg, sedeleg)
   // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
   private val delegS = delegVecM(causeNO(7,0)) && (priviledgeMode < ModeM)
@@ -1346,7 +1362,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     val dcsrNew = WireInit(dcsr.asTypeOf(new DcsrStruct))
     val debugModeNew = WireInit(debugMode)
     val lastBranchInfo = WireInit(csrio.exception.bits.uop.cf.lastBranch)
-    val hasFdiBrFault = hasFdiUJumpFault && lastBranchInfo.valid
+    val hasFdiBrFault = (hasFdiUJumpFault || hasFdiSJumpFault) && lastBranchInfo.valid
     val hasFdiBrIntr = hasFdiJumpIntr && lastBranchInfo.valid
     when (hasDebugTrap && !debugMode) {
       import DcsrStruct._
@@ -1405,8 +1421,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   XSDebug(hasExceptionIntr && delegS, "sepc is writen!!! pc:%x\n", cfIn.pc)
 
-  // save fault reason in FDIFReason Reg (from CF / from ROB)
-  when (hasFdiUCheckFault){
+  // save fault reason in FDIFReason Reg from ROB
+  when (hasFdiUCheckFault || hasFdiSCheckFault){
     fdiFReasonReg := fdiFaultReasonFromRob
   }
 
@@ -1498,6 +1514,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     difftestCSR.medeleg := medeleg
     difftestCSR.sedeleg := sedeleg
     difftestCSR.fdiMainCfg := fdiMainCfg
+    difftestCSR.fdiSMBoundLo := fdiSMainBoundLo
+    difftestCSR.fdiSMBoundHi := fdiSMainBoundHi
     difftestCSR.fdiUMBoundLo := fdiUMainBoundLo
     difftestCSR.fdiUMBoundHi := fdiUMainBoundHi
     difftestCSR.fdiLibCfg := ZeroExt(VecInit(fdiMemBoundRegs.map(_.cfg)).asUInt, XLEN)

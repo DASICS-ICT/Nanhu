@@ -25,7 +25,7 @@ import chisel3.util._
 import xiangshan.backend.execute.exu.ExuType
 import freechips.rocketchip.diplomacy._
 import xiangshan.{ExuOutput, HasXSParameter, MemPredUpdateReq, Redirect, XSCoreParamsKey}
-import xiangshan.ExceptionNO.{fdiUCheckFault}
+import xiangshan.ExceptionNO.{fdiUCheckFault, fdiSCheckFault}
 import xiangshan.frontend.Ftq_RF_Components
 import difftest._
 import xs.utils.GTimer
@@ -82,6 +82,7 @@ class WriteBackNetworkImp(outer:WriteBackNetwork)(implicit p:Parameters) extends
     res.bits := RegEnable(realIn.bits, realIn.valid)
     if (latency == 1){
         when (realIn.bits.uop.cf.fdiFaultReason === FDIFaultReason.JumpFDIFault) {
+          res.bits.uop.cf.exceptionVec(fdiSCheckFault) := realIn.bits.uop.cf.exceptionVec(fdiSCheckFault)
           res.bits.uop.cf.exceptionVec(fdiUCheckFault) := realIn.bits.uop.cf.exceptionVec(fdiUCheckFault)
           res.bits.uop.cf.fdiFaultReason := realIn.bits.uop.cf.fdiFaultReason
       }
