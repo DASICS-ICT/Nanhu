@@ -166,8 +166,8 @@ package object xiangshan {
   }
 
   object ExceptionVec {
-    // 16 RV exception + 1 FDI exception
-    def apply() = Vec(16 + 1, Bool())
+    // 16 RV exception + 2 FDI exception
+    def apply() = Vec(16 + 2, Bool())
   }
 
   object PMAMode {
@@ -333,7 +333,8 @@ package object xiangshan {
     def FDIExcOffset = 8
     //  FDI excetption       number    offset
     def fdiUCheckFault = 24 - FDIExcOffset
-
+    def fdiSCheckFault = 25 - FDIExcOffset
+    
     // def fdiUJumpFault = 24 - FDIExcOffset
     // def fdiSJumpFault = 25 - FDIExcOffset
     // def fdiULoadAccessFault = 26 - FDIExcOffset
@@ -357,6 +358,7 @@ package object xiangshan {
       loadPageFault,
       storeAccessFault,
       loadAccessFault,
+      fdiSCheckFault,
       fdiUCheckFault
     )
     def prioritiesRegular = Seq(
@@ -380,9 +382,11 @@ package object xiangshan {
       instrAccessFault,
       illegalInstr,
       instrPageFault,
+      fdiSCheckFault,
       fdiUCheckFault
     )
     def fdiSet = Seq(
+      fdiSCheckFault,
       fdiUCheckFault
     )
     def partialSelect(vec: Vec[Bool], select: Seq[Int]): Vec[Bool] = {

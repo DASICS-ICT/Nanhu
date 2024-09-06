@@ -277,6 +277,7 @@ class MemFDI(implicit p: Parameters) extends XSModule with FDIMethod with HasCSR
   mainCfg.gen(fdi_main_cfg)
 
   val fdi_config_mapping = Map(
+    MaskedRegMap(FDISMainCfg, fdi_main_cfg, "h3ff".U(XLEN.W)),
     MaskedRegMap(FDIUMainCfg, fdi_main_cfg, "h3e".U(XLEN.W))
   )
 
@@ -342,11 +343,13 @@ class FDIMemChecker(implicit p: Parameters) extends XSModule
 
   io.resp.fdi_fault := FDIFaultReason.noFDIFault
   when(fdi_req_write && fdi_mem_fault && 
-        (io.mode === ModeU && io.mainCfg.uEnable && !io.mainCfg.closeUStoreFault)){
+        (io.mode === ModeU && io.mainCfg.uEnable && !io.mainCfg.closeUStoreFault) ||
+        (io.mode === ModeS && io.mainCfg.sEnable && !io.mainCfg.closeSStoreFault)){
     io.resp.fdi_fault := FDIFaultReason.StoreFDIFault
   } 
   .elsewhen (fdi_req_read && fdi_mem_fault && 
-        (io.mode === ModeU && io.mainCfg.uEnable && !io.mainCfg.closeULoadFault)){
+        (io.mode === ModeU && io.mainCfg.uEnable && !io.mainCfg.closeULoadFault) ||
+        (io.mode === ModeS && io.mainCfg.sEnable && !io.mainCfg.closeSLoadFault)){
     io.resp.fdi_fault := FDIFaultReason.LoadFDIFault
   }
   io.resp.mode := io.mode
@@ -368,6 +371,8 @@ class FDIBranchChecker(implicit p: Parameters) extends XSModule
   private val fdi_return_pc = RegInit(0.U(XLEN.W))
   private val fdi_azone_return_pc = RegInit(0.U(XLEN.W))
   private val fdi_main_cfg = RegInit(0.U(XLEN.W))
+  private val fdi_smain_bound_hi = RegInit(0.U(XLEN.W))
+  private val fdi_smain_bound_lo = RegInit(0.U(XLEN.W))
   private val fdi_umain_bound_hi = RegInit(0.U(XLEN.W))
   private val fdi_umain_bound_lo = RegInit(0.U(XLEN.W))
 
@@ -375,6 +380,9 @@ class FDIBranchChecker(implicit p: Parameters) extends XSModule
     MaskedRegMap(FDIMainCall, fdi_main_call),
     MaskedRegMap(FDIReturnPc, fdi_return_pc),
     MaskedRegMap(FDIActiveZoneReturnPc,fdi_azone_return_pc),
+    MaskedRegMap(FDISMainCfg, fdi_main_cfg, "h3ff".U(XLEN.W)),
+    MaskedRegMap(FDISMainBoundLo, fdi_smain_bound_lo),
+    MaskedRegMap(FDISMainBoundHi, fdi_smain_bound_hi),
     MaskedRegMap(FDIUMainCfg, fdi_main_cfg, "h3e".U(XLEN.W)),
     MaskedRegMap(FDIUMainBoundLo, fdi_umain_bound_lo),
     MaskedRegMap(FDIUMainBoundHi, fdi_umain_bound_hi)
@@ -385,13 +393,14 @@ class FDIBranchChecker(implicit p: Parameters) extends XSModule
 
   private val mainCfg = Wire(new FDIMainCfg())
   mainCfg.gen(fdi_main_cfg)
-  private val boundLo = fdi_umain_bound_lo
-  private val boundHi = fdi_umain_bound_hi
+  private val boundLo = Mux(io.mode === ModeS, fdi_smain_bound_lo, fdi_umain_bound_lo)
+  private val boundHi = Mux(io.mode === ModeS, fdi_smain_bound_hi, fdi_umain_bound_hi)
 
-  private val branchUntrusted = (io.mode === ModeU && mainCfg.uEnable && !mainCfg.closeUJumpFault) &&
-    !fdi_jump_in_bound(
-      addr = io.lastBranch, boundHi = boundHi(VAddrBits - 1, 0), boundLo = boundLo(VAddrBits - 1, 0)
-    )
+  private val branchUntrusted = (io.mode === ModeU && mainCfg.uEnable && !mainCfg.closeUJumpFault || 
+                                 io.mode === ModeS && mainCfg.sEnable && !mainCfg.closeSJumpFault) &&
+                                !fdi_jump_in_bound(
+                                addr = io.lastBranch, boundHi = boundHi(VAddrBits - 1, 0), boundLo = boundLo(VAddrBits - 1, 0)
+                                )
   private val targetOutOfActive = fdi_jump_check(io.target, fdi)
   private val illegalBranch = io.valid && branchUntrusted && targetOutOfActive &&
     (io.target =/= fdi_return_pc) && (io.target =/= fdi_main_call) && (io.target =/= fdi_azone_return_pc)
@@ -404,12 +413,23 @@ class FDIBranchChecker(implicit p: Parameters) extends XSModule
   io.resp.mode := io.mode
 }
 class FDIMainCfg(implicit p: Parameters) extends XSBundle {
+  val closeSJumpFault  = Bool()
+  val closeSLoadFault   = Bool()
+  val closeSStoreFault  = Bool()
+  val closeSEcallFault  = Bool()
+  
   val closeUJumpFault  = Bool()
   val closeULoadFault   = Bool()
   val closeUStoreFault  = Bool()
   val closeUEcallFault  = Bool()
 
   val uEnable = Bool()
+  val sEnable = Bool()
+
+  private val CSFT = 0x9
+  private val CSLT = 0x8
+  private val CSST = 0x7
+  private val CSET = 0x6
 
   private val CUFT = 0x5
   private val CULT = 0x4
@@ -417,14 +437,21 @@ class FDIMainCfg(implicit p: Parameters) extends XSBundle {
   private val CUET = 0x2
 
   private val UENA = 0x1
+  private val SENA = 0x0
 
   def gen(reg: UInt): Unit = {
-    this.closeUJumpFault := reg(CUFT)
+    this.closeSJumpFault  := reg(CSFT)
+    this.closeSLoadFault  := reg(CSLT)
+    this.closeSStoreFault := reg(CSST)
+    this.closeSEcallFault := reg(CSET)
+
+    this.closeUJumpFault  := reg(CUFT)
     this.closeULoadFault  := reg(CULT)
     this.closeUStoreFault := reg(CUST)
     this.closeUEcallFault := reg(CUET)
 
     this.uEnable := reg(UENA)
+    this.sEnable := reg(SENA)
   }
 }
 class FDIMainBound(implicit p: Parameters) extends XSBundle with FDIConst {
@@ -501,26 +528,32 @@ class FDITaggerIO(implicit p: Parameters) extends XSBundle {
 class FDITagger(implicit p: Parameters) extends XSModule with HasCSRConst {
   val io: FDITaggerIO = IO(new FDITaggerIO())
 
-  private val mainCfgReg = RegInit(UInt(XLEN.W), 0.U)
+  private val fdi_main_cfg = RegInit(UInt(XLEN.W), 0.U)
+  private val fdi_smain_bound_hi = RegInit(UInt(XLEN.W), 0.U)
+  private val fdi_smain_bound_lo = RegInit(UInt(XLEN.W), 0.U)
   private val fdi_umain_bound_hi = RegInit(UInt(XLEN.W), 0.U)
   private val fdi_umain_bound_lo = RegInit(UInt(XLEN.W), 0.U)
 
   private val mainCfg = Wire(new FDIMainCfg())
-  mainCfg.gen(mainCfgReg)
+  mainCfg.gen(fdi_main_cfg)
   private val mainBound = Wire(new FDIMainBound())
-  private val boundLo = fdi_umain_bound_lo
-  private val boundHi = fdi_umain_bound_hi
+  private val boundLo = Mux(io.mode === ModeS,fdi_smain_bound_lo,fdi_umain_bound_lo)
+  private val boundHi = Mux(io.mode === ModeS,fdi_smain_bound_hi,fdi_umain_bound_hi)
   mainBound.gen(boundLo, boundHi)
   private val cmpTags = mainBound.getPcTags(io.addr)
   io.notTrusted := Mux(
-    io.mode === ModeU && mainCfg.uEnable,
+    io.mode === ModeU && mainCfg.uEnable || io.mode === ModeS && mainCfg.sEnable,
+
     cmpTags,
     VecInit(Seq.fill(FetchWidth * 2)(false.B))
   )
 
   val w = io.distribute_csr.w
   val mapping: Map[Int, (UInt, UInt, UInt => UInt, UInt, UInt => UInt)] = Map(
-    MaskedRegMap(FDIUMainCfg, mainCfgReg, "h2".U(XLEN.W)),
+    MaskedRegMap(FDISMainCfg, fdi_main_cfg, "h3ff".U(XLEN.W)),
+    MaskedRegMap(FDISMainBoundLo, fdi_smain_bound_lo),
+    MaskedRegMap(FDISMainBoundHi, fdi_smain_bound_hi),
+    MaskedRegMap(FDIUMainCfg, fdi_main_cfg, "h3e".U(XLEN.W)),
     MaskedRegMap(FDIUMainBoundLo, fdi_umain_bound_lo),
     MaskedRegMap(FDIUMainBoundHi, fdi_umain_bound_hi)
   )

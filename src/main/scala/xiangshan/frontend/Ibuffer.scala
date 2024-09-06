@@ -87,6 +87,7 @@ class IBufEntry(implicit p: Parameters) extends XSBundle with HasCSRConst {
     cf.exceptionVec(instrPageFault) := ipf
     cf.exceptionVec(instrAccessFault) := acf
     cf.exceptionVec(fdiUCheckFault) := fdiBrResp.fdi_fault === FDIFaultReason.JumpFDIFault && fdiBrResp.mode === ModeU
+    cf.exceptionVec(fdiSCheckFault) := fdiBrResp.fdi_fault === FDIFaultReason.JumpFDIFault && fdiBrResp.mode === ModeS
     cf.trigger := triggered
     cf.pd := pd
     cf.pred_taken := pred_taken

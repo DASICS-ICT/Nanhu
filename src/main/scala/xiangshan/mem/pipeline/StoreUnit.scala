@@ -196,6 +196,7 @@ class StoreUnit_S2(implicit p: Parameters) extends XSModule with HasCSRConst{
   //FDI store access fault
   when (io.fdiResp.fdi_fault > io.in.bits.uop.cf.fdiFaultReason) { // FDIFaultReason.StoreFDIFault
     io.out.bits.uop.cf.exceptionVec(fdiUCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiUCheckFault) || io.fdiResp.mode === ModeU
+    io.out.bits.uop.cf.exceptionVec(fdiSCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiSCheckFault) || io.fdiResp.mode === ModeS
     io.out.bits.uop.cf.fdiFaultReason := io.fdiResp.fdi_fault
   }
 }

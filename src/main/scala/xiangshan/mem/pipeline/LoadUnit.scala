@@ -342,6 +342,7 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper wi
   //FDI load access fault  
   when (io.fdiResp.fdi_fault > io.in.bits.uop.cf.fdiFaultReason) { // FDIFaultReason.LoadFDIFault
     s2_exception_vec(fdiUCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiUCheckFault) || io.fdiResp.mode === ModeU
+    s2_exception_vec(fdiSCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiSCheckFault) || io.fdiResp.mode === ModeS
     s2_exception_ffreason := io.fdiResp.fdi_fault
   }
 
