@@ -394,6 +394,7 @@ object BDecode extends DecodeConstants{
   */
 object FDIDecode extends DecodeConstants {
   val table: Array[(BitPat, List[BitPat])] = Array(
+    FDICALL_J -> List(SrcType.pc, SrcType.imm, SrcType.DC, FuType.jmp, JumpOpType.fdicall_j, Y, N, N, N, Y, Y, N, N, VstartType.hold, SelImm.IMM_DIJ),
     FDICALL_JR-> List(SrcType.reg,  SrcType.imm, SrcType.DC, FuType.jmp, JumpOpType.fdicall_jr,  Y, N, N, N, Y, Y, N, N, VstartType.hold, SelImm.IMM_I)
   )
 }
@@ -979,6 +980,14 @@ case class Imm_CI() extends Imm(15) {
   override def minBitsFromInstr(instr: UInt): UInt = Cat(instr(29, 20), instr(19,15))
 }
 
+/* immediate used in DASICSCALL.J */
+case class Imm_DIJ() extends Imm(22) {
+  override def do_toImm32(minBits: UInt): UInt = SignExt(Cat(minBits, 0.U(1.W)), 32)
+
+  override def minBitsFromInstr(instr: UInt): UInt = {
+    Cat(instr(31), instr(7), instr(20, 15), instr(11, 8), instr(30, 21))
+  }
+}
 object ImmUnion {
   val I = Imm_I()
   val S = Imm_S()
@@ -990,7 +999,8 @@ object ImmUnion {
   val VC = Imm_C()
   val VCI = Imm_CI()
   val VA = Imm_VI()
-  val imms = Seq(I, S, B, U, J, Z, B6, VC, VCI, VA)
+  val DIJ = Imm_DIJ()
+  val imms = Seq(I, S, B, U, J, Z, B6, VC, VCI, VA, DIJ)
   val maxLen = imms.maxBy(_.len).len
   val immSelMap = Seq(
     SelImm.IMM_I,
@@ -1002,7 +1012,8 @@ object ImmUnion {
     SelImm.IMM_B6,
     SelImm.IMM_C,
     SelImm.IMM_CI,
-    SelImm.IMM_VA
+    SelImm.IMM_VA,
+    SelImm.IMM_DIJ
   ).zip(imms)
   println(s"ImmUnion max len: $maxLen")
 }
@@ -1107,7 +1118,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
 
   // fdi decode check
   val fdiEn = io.csrCtrl.fdi_enable
-  val illegalFDI = FDICALL_JR === ctrl_flow.instr && (!fdiEn || ctrl_flow.fdiUntrusted)
+  val illegalFDI = (ctrl_flow.instr === FDICALL_JR || ctrl_flow.instr === FDICALL_J) && (!fdiEn || ctrl_flow.fdiUntrusted)
 
   // read src1~3 location
   cs.lsrc(0) := ctrl_flow.instr(RS1_MSB, RS1_LSB)
@@ -1116,6 +1127,11 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   // read dest location
   cs.ldest := ctrl_flow.instr(RD_MSB, RD_LSB)
 
+  // set RD=ra (0x1) for FDICall.J
+  val isFDICallJ = cs.fuType === FuType.jmp && cs.fuOpType === JumpOpType.fdicall_j
+  when (isFDICallJ) {
+    cs.ldest := 0x1.U((RD_MSB - RD_LSB + 1).W)
+  }
   // fill in exception vector
   cf_ctrl.cf.exceptionVec := io.enq.ctrl_flow.exceptionVec
   cf_ctrl.cf.exceptionVec(illegalInstr) := illegalInst || illegalFp || illegalVec || illegalFDI 

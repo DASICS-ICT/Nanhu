@@ -6,6 +6,7 @@ object JumpOpType {
   def jalr: UInt = "b01".U
   def auipc: UInt = "b10".U
   def prefetch_i: UInt = "b11".U
+  def fdicall_j: UInt = "b100".U   // this would split into a fdicall_j & a csrw
   def fdicall_jr: UInt = "b101".U  // this would split into a jalr & a csrw
   //    def call = "b11_011".U
   //    def ret  = "b11_100".U
@@ -13,5 +14,7 @@ object JumpOpType {
   def jumpOpIsJalr(op: UInt): Bool = op === jalr
   def jumpOpIsAuipc(op: UInt): Bool = op === auipc
   def jumpOpIsPrefetch_I(op: UInt): Bool = op === prefetch_i
-  def jumpOpIsFDIcall(op: UInt): Bool = op === fdicall_jr
+  def jumpOpIsFDIcall(op: UInt): Bool = (op === fdicall_j || op === fdicall_jr)
+  def jumpOpIsFDIcallJR(op: UInt): Bool = op === fdicall_jr
+  def jumpOpIsFDIcallJ(op: UInt): Bool = op === fdicall_j
 }
