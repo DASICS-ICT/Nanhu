@@ -773,7 +773,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     MaskedRegMap(Misa, misa, 0.U, MaskedRegMap.Unwritable), // now whole misa is unchangeable
     MaskedRegMap(Medeleg, medeleg, "hff00b3ff".U(XLEN.W)),
     MaskedRegMap(Mideleg, mideleg, "h333".U(XLEN.W)),
-    MaskedRegMap(Mie, mie, "haaa".U(XLEN.W)),
+    MaskedRegMap(Mie, mie, "hbbb".U(XLEN.W)),
     MaskedRegMap(Mtvec, mtvec, mtvecMask, MaskedRegMap.NoSideEffect, mtvecMask),
     MaskedRegMap(Mcounteren, mcounteren),
 
