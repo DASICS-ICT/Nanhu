@@ -341,16 +341,17 @@ class FDIMemChecker(implicit p: Parameters) extends XSModule
     fdi_req_write := FDIOp.isWrite(req.bits.operation)
   }
 
-  io.resp.fdi_fault := FDIFaultReason.noFDIFault
   when(fdi_req_write && fdi_mem_fault && 
-        (io.mode === ModeU && io.mainCfg.uEnable && !io.mainCfg.closeUStoreFault) ||
-        (io.mode === ModeS && io.mainCfg.sEnable && !io.mainCfg.closeSStoreFault)){
+        ((io.mode === ModeU && io.mainCfg.uEnable && !io.mainCfg.closeUStoreFault) ||
+        (io.mode === ModeS && io.mainCfg.sEnable && !io.mainCfg.closeSStoreFault))){
     io.resp.fdi_fault := FDIFaultReason.StoreFDIFault
   } 
   .elsewhen (fdi_req_read && fdi_mem_fault && 
-        (io.mode === ModeU && io.mainCfg.uEnable && !io.mainCfg.closeULoadFault) ||
-        (io.mode === ModeS && io.mainCfg.sEnable && !io.mainCfg.closeSLoadFault)){
+        ((io.mode === ModeU && io.mainCfg.uEnable && !io.mainCfg.closeULoadFault) ||
+        (io.mode === ModeS && io.mainCfg.sEnable && !io.mainCfg.closeSLoadFault))){
     io.resp.fdi_fault := FDIFaultReason.LoadFDIFault
+  }.otherwise{
+    io.resp.fdi_fault := FDIFaultReason.noFDIFault
   }
   io.resp.mode := io.mode
 }
@@ -396,8 +397,8 @@ class FDIBranchChecker(implicit p: Parameters) extends XSModule
   private val boundLo = Mux(io.mode === ModeS, fdi_smain_bound_lo, fdi_umain_bound_lo)
   private val boundHi = Mux(io.mode === ModeS, fdi_smain_bound_hi, fdi_umain_bound_hi)
 
-  private val branchUntrusted = (io.mode === ModeU && mainCfg.uEnable && !mainCfg.closeUJumpFault || 
-                                 io.mode === ModeS && mainCfg.sEnable && !mainCfg.closeSJumpFault) &&
+  private val branchUntrusted = ((io.mode === ModeU && mainCfg.uEnable && !mainCfg.closeUJumpFault) || 
+                                 (io.mode === ModeS && mainCfg.sEnable && !mainCfg.closeSJumpFault)) &&
                                 !fdi_jump_in_bound(
                                 addr = io.lastBranch, boundHi = boundHi(VAddrBits - 1, 0), boundLo = boundLo(VAddrBits - 1, 0)
                                 )
@@ -543,7 +544,6 @@ class FDITagger(implicit p: Parameters) extends XSModule with HasCSRConst {
   private val cmpTags = mainBound.getPcTags(io.addr)
   io.notTrusted := Mux(
     io.mode === ModeU && mainCfg.uEnable || io.mode === ModeS && mainCfg.sEnable,
-
     cmpTags,
     VecInit(Seq.fill(FetchWidth * 2)(false.B))
   )
