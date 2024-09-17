@@ -1571,7 +1571,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     difftestCSR.fdiMainCall := fdiMainCallReg
     difftestCSR.fdiReturnPC := fdiReturnPcReg
     difftestCSR.fdiAZoneReturnPC := fdiAZoneReturnPcReg
-    difftestCSR.fdiFReason  := fdiFReasonReg
+    difftestCSR.fdiFReason  := ZeroExt(fdiFReasonReg, XLEN)
     difftestCSR.upkru := upkru
     difftestCSR.spkrs := spkrs
     difftestCSR.spkctl := spkctl
