@@ -1563,7 +1563,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
       difftestCSR.fdiLibBound(i * 2) := fdiMemBoundRegs(i).boundLo
       difftestCSR.fdiLibBound(i * 2 + 1) := fdiMemBoundRegs(i).boundHi
     }
-    difftestCSR.fdiJumpCfg := ZeroExt(VecInit(fdiJumpBoundRegs.map(_.cfg)).asUInt, XLEN)
+    difftestCSR.fdiJumpCfg := ZeroExt(VecInit(fdiJumpBoundRegs.map(_.cfg.asTypeOf(UInt(16.W)))).asUInt, XLEN)
     for (i <- 0 until NumFDIJumpBounds) {
       difftestCSR.fdiJumpBound(i * 2) := fdiJumpBoundRegs(i).boundLo
       difftestCSR.fdiJumpBound(i * 2 + 1) := fdiJumpBoundRegs(i).boundHi
