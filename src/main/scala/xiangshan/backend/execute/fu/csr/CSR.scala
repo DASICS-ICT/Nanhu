@@ -359,7 +359,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   val fdiCfg = Wire(new FDIMainCfg())
   fdiCfg.gen(fdiMainCfg)
-  csrio.customCtrl.fdi_enable := fdiCfg.uEnable
+  csrio.customCtrl.fdi_enable := Mux(priviledgeMode === ModeU, fdiCfg.uEnable,
+                                 Mux(priviledgeMode === ModeS, fdiCfg.sEnable, 
+                                     false.B))
 
   val fdiMainCallReg: UInt = RegInit(UInt(XLEN.W), 0.U)
   val fdiReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
