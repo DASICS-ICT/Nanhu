@@ -19,7 +19,7 @@ import chisel3.util._
 import freechips.rocketchip.diplomacy.LazyModule
 import xiangshan.backend.execute.exu.{ExuType, JmpExu}
 import xiangshan.{DistributedCSRIO, XSCoreParamsKey}
-import xiangshan.backend.execute.fu.FDICallJumpExcpIO
+import xiangshan.backend.execute.fu.DasicsCallJumpExcpIO
 
 class JmpComplex(id: Int, bypassNum:Int)(implicit p:Parameters) extends BasicExuComplex{
   val jmp = LazyModule(new JmpExu(id, "JmpComplex", bypassNum))
@@ -33,7 +33,7 @@ class JmpComplexImp(outer:JmpComplex, id: Int, bypassNum:Int) extends BasicExuCo
   private val issueOut = outer.issueNode.out.head._1
   val io = IO(new Bundle {
     val prefetchI = Output(Valid(UInt(p(XSCoreParamsKey).XLEN.W)))
-    val fdicallJumpExcpIO = Output(new FDICallJumpExcpIO())
+    val dasicscallJumpExcpIO = Output(new DasicsCallJumpExcpIO())
   })
 
   issueOut <> issueIn
@@ -43,5 +43,5 @@ class JmpComplexImp(outer:JmpComplex, id: Int, bypassNum:Int) extends BasicExuCo
 
   issueIn.issue.ready := issueOut.issue.ready
 
-  outer.jmp.module.io.fdicallJumpExcpIO <> io.fdicallJumpExcpIO
+  outer.jmp.module.io.dasicscallJumpExcpIO <> io.dasicscallJumpExcpIO
 }

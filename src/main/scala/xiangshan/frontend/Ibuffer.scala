@@ -24,8 +24,8 @@ import utils._
 import xs.utils._
 import xiangshan.ExceptionNO._
 import xs.utils.perf.HasPerfLogging
-import xiangshan.backend.execute.fu.FDIFaultReason
-import xiangshan.backend.execute.fu.FDIRespDataBundle
+import xiangshan.backend.execute.fu.DasicsFaultReason
+import xiangshan.backend.execute.fu.DasicsRespDataBundle
 import xiangshan.backend.execute.fu.csr.HasCSRConst
 class IbufPtr(implicit p: Parameters) extends CircularQueuePtr[IbufPtr](
   p => p(XSCoreParamsKey).IBufSize
@@ -51,8 +51,8 @@ class IBufEntry(implicit p: Parameters) extends XSBundle with HasCSRConst {
   val acf = Bool()
   val crossPageIPFFix = Bool()
   val triggered = new TriggerCf
-  val fdiUntrusted = Bool()
-  val fdiBrResp = new FDIRespDataBundle
+  val dasicsUntrusted = Bool()
+  val dasicsBrResp = new DasicsRespDataBundle
   val lastBranch: UInt = UInt(VAddrBits.W)
 
   def fromFetch(fetch: FetchToIBuffer, i: Int): IBufEntry = {
@@ -67,12 +67,12 @@ class IBufEntry(implicit p: Parameters) extends XSBundle with HasCSRConst {
     acf := fetch.acf(i)
     crossPageIPFFix := fetch.crossPageIPFFix(i)
     triggered := fetch.triggered(i)
-    fdiUntrusted := fetch.fdiUntrusted(i)
-    fdiBrResp.fdi_fault := FDIFaultReason.noFDIFault
-    fdiBrResp.mode := fetch.fdiBrResp.mode
+    dasicsUntrusted := fetch.dasicsUntrusted(i)
+    dasicsBrResp.dasics_fault := DasicsFaultReason.noDasicsFault
+    dasicsBrResp.mode := fetch.dasicsBrResp.mode
     lastBranch := DontCare
     if (i == 0) { // only the first instr is a branch target
-      fdiBrResp.fdi_fault := fetch.fdiBrResp.fdi_fault
+      dasicsBrResp.dasics_fault := fetch.dasicsBrResp.dasics_fault
       lastBranch := fetch.lastBranch
     }
     this
@@ -86,8 +86,8 @@ class IBufEntry(implicit p: Parameters) extends XSBundle with HasCSRConst {
     cf.exceptionVec := 0.U.asTypeOf(ExceptionVec())
     cf.exceptionVec(instrPageFault) := ipf
     cf.exceptionVec(instrAccessFault) := acf
-    cf.exceptionVec(fdiUCheckFault) := fdiBrResp.fdi_fault === FDIFaultReason.JumpFDIFault && fdiBrResp.mode === ModeU
-    cf.exceptionVec(fdiSCheckFault) := fdiBrResp.fdi_fault === FDIFaultReason.JumpFDIFault && fdiBrResp.mode === ModeS
+    cf.exceptionVec(dasicsUCheckFault) := dasicsBrResp.dasics_fault === DasicsFaultReason.JumpDasicsFault && dasicsBrResp.mode === ModeU
+    cf.exceptionVec(dasicsSCheckFault) := dasicsBrResp.dasics_fault === DasicsFaultReason.JumpDasicsFault && dasicsBrResp.mode === ModeS
     cf.trigger := triggered
     cf.pd := pd
     cf.pred_taken := pred_taken
@@ -99,9 +99,9 @@ class IBufEntry(implicit p: Parameters) extends XSBundle with HasCSRConst {
     cf.ssid := DontCare
     cf.ftqPtr := ftqPtr
     cf.ftqOffset := ftqOffset
-    cf.fdiUntrusted := fdiUntrusted
-    cf.fdiFaultReason := fdiBrResp.fdi_fault
-    cf.lastBranch.valid := fdiBrResp.fdi_fault =/= FDIFaultReason.noFDIFault
+    cf.dasicsUntrusted := dasicsUntrusted
+    cf.dasicsFaultReason := dasicsBrResp.dasics_fault
+    cf.lastBranch.valid := dasicsBrResp.dasics_fault =/= DasicsFaultReason.noDasicsFault
     cf.lastBranch.bits := lastBranch
     cf
   }

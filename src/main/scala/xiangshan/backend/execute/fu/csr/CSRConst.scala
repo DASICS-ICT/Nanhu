@@ -66,17 +66,17 @@ trait HasCSRConst {
 
   val Utimer        = 0x045
 
-  // User FDI registers
-  val FDILibCfgBase = 0x880
-  val FDILibBoundBase = 0x890
+  // User Dasics registers
+  val DasicsLibCfgBase = 0x880
+  val DasicsLibBoundBase = 0x890
 
-  val FDIMainCall  = 0x8b0
-  val FDIReturnPc  = 0x8b1
-  val FDIActiveZoneReturnPc = 0x8b2
-  val FDIFReason   = 0x8b3
+  val DasicsMainCall  = 0x8b0
+  val DasicsReturnPc  = 0x8b1
+  val DasicsActiveZoneReturnPc = 0x8b2
+  val DasicsFReason   = 0x8b3
   
-  val FDIJmpCfgBase = 0x8c8
-  val FDIJmpBoundBase = 0x8c0
+  val DasicsJmpCfgBase = 0x8c8
+  val DasicsJmpBoundBase = 0x8c0
   // User-Level MPK Register
   val Upkru         = 0x800
 
@@ -116,10 +116,10 @@ trait HasCSRConst {
   val Sdsid         = 0x9C0
   val Sfetchctl     = 0x9E0
 
-  // Supervisor FDI Settings (for User protection)
-  val FDIUMainCfg = 0x9E0
-  val FDIUMainBoundLo = 0x9E2
-  val FDIUMainBoundHi = 0x9E3
+  // Supervisor Dasics Settings (for User protection)
+  val DasicsUMainCfg = 0x9E0
+  val DasicsUMainBoundLo = 0x9E2
+  val DasicsUMainBoundHi = 0x9E3
   
   // SPMP
   val SpmpSwitch    = 0x19F
@@ -225,9 +225,9 @@ trait HasCSRConst {
   val Mhpmevent31   = 0x33F
 
   // Machine DASICS Settings (for Supervisor protection)
-  val FDISMainCfg = 0xBC0
-  val FDISMainBoundLo = 0xBC2
-  val FDISMainBoundHi = 0xBC3
+  val DasicsSMainCfg = 0xBC0
+  val DasicsSMainBoundLo = 0xBC2
+  val DasicsSMainBoundHi = 0xBC3
 
   // Debug/Trace Registers (shared with Debug Mode) (not implemented)
 

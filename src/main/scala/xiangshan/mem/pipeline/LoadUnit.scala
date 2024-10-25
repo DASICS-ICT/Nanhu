@@ -194,7 +194,7 @@ class LoadUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging{
     val needLdVioCheckRedo = Output(Bool())
     val s1_cancel = Input(Bool())
     val bankConflictAvoidIn = Input(UInt(1.W))
-    val fdiReq = ValidIO(new FDIReqBundle())
+    val dasicsReq = ValidIO(new DasicsReqBundle())
   })
 
   val s1_uop = io.in.bits.uop
@@ -238,11 +238,11 @@ class LoadUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging{
   io.loadViolationQueryReq.bits.paddr := s1_paddr_dup_lsu
   io.loadViolationQueryReq.bits.uop := s1_uop
 
-  //FDI check
-  io.fdiReq.valid := io.out.fire //TODO: temporarily assignment
-  io.fdiReq.bits.addr := io.out.bits.vaddr //TODO: need for alignment?
-  io.fdiReq.bits.inUntrustedZone := io.out.bits.uop.cf.fdiUntrusted
-  io.fdiReq.bits.operation := FDIOp.read
+  //Dasics check
+  io.dasicsReq.valid := io.out.fire //TODO: temporarily assignment
+  io.dasicsReq.bits.addr := io.out.bits.vaddr //TODO: need for alignment?
+  io.dasicsReq.bits.inUntrustedZone := io.out.bits.uop.cf.dasicsUntrusted
+  io.dasicsReq.bits.operation := DasicsOp.read
 
   // Generate forwardMaskFast to wake up insts earlier
   val forwardMaskFast = io.lsq.forwardMaskFast.asUInt | io.sbuffer.forwardMaskFast.asUInt
@@ -272,9 +272,9 @@ class LoadUnit_S1(implicit p: Parameters) extends XSModule with HasPerfLogging{
   io.out.bits.uop.cf.exceptionVec(loadAccessFault) := io.dtlbResp.bits.excp(0).af.ld && EnableMem
   
   when (io.dtlbResp.bits.excp(0).pkf.ld) {
-    io.out.bits.uop.cf.exceptionVec(fdiUCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiUCheckFault) || io.dtlbResp.bits.excp(0).pkf.isUser
-    io.out.bits.uop.cf.exceptionVec(fdiSCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiSCheckFault) || !io.dtlbResp.bits.excp(0).pkf.isUser
-    io.out.bits.uop.cf.fdiFaultReason := Mux(FDIFaultReason.LoadMPKFault > io.in.bits.uop.cf.fdiFaultReason, FDIFaultReason.LoadMPKFault, io.in.bits.uop.cf.fdiFaultReason)
+    io.out.bits.uop.cf.exceptionVec(dasicsUCheckFault) := io.in.bits.uop.cf.exceptionVec(dasicsUCheckFault) || io.dtlbResp.bits.excp(0).pkf.isUser
+    io.out.bits.uop.cf.exceptionVec(dasicsSCheckFault) := io.in.bits.uop.cf.exceptionVec(dasicsSCheckFault) || !io.dtlbResp.bits.excp(0).pkf.isUser
+    io.out.bits.uop.cf.dasicsFaultReason := Mux(DasicsFaultReason.LoadMPKFault > io.in.bits.uop.cf.dasicsFaultReason, DasicsFaultReason.LoadMPKFault, io.in.bits.uop.cf.dasicsFaultReason)
   }
 
   io.out.bits.ptwBack := io.dtlbResp.bits.ptwBack
@@ -318,7 +318,7 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper wi
     val s2_can_replay_from_fetch = Output(Bool()) // dirty code
     val loadDataFromDcache = Output(new LoadDataFromDcacheBundle)
     val lpvCancel = Output(Bool())
-    val fdiResp = Flipped(new FDIRespBundle)
+    val dasicsResp = Flipped(new DasicsRespBundle)
   })
 
   val pmp = WireInit(io.pmpResp)
@@ -337,7 +337,7 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper wi
   // if such exception happen, that inst and its exception info
   // will be force writebacked to rob
   val s2_exception_vec = WireInit(io.in.bits.uop.cf.exceptionVec)
-  val s2_exception_ffreason = WireInit(io.in.bits.uop.cf.fdiFaultReason)
+  val s2_exception_ffreason = WireInit(io.in.bits.uop.cf.dasicsFaultReason)
   s2_exception_vec(loadAccessFault) := (io.in.bits.uop.cf.exceptionVec(loadAccessFault) || pmp.ld) && EnableMem
   // soft prefetch will not trigger any exception (but ecc error interrupt may be triggered)
   when (s2_is_prefetch) {
@@ -345,11 +345,11 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper wi
   }
   val s2_exception = Mux(EnableMem, ExceptionNO.selectByFu(s2_exception_vec, lduCfg).asUInt.orR,false.B)
 
-  //FDI load access fault  
-  when (io.fdiResp.fdi_fault > io.in.bits.uop.cf.fdiFaultReason) { // FDIFaultReason.LoadFDIFault
-    s2_exception_vec(fdiUCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiUCheckFault) || io.fdiResp.mode === ModeU
-    s2_exception_vec(fdiSCheckFault) := io.in.bits.uop.cf.exceptionVec(fdiSCheckFault) || io.fdiResp.mode === ModeS
-    s2_exception_ffreason := io.fdiResp.fdi_fault
+  //Dasics load access fault  
+  when (io.dasicsResp.dasics_fault > io.in.bits.uop.cf.dasicsFaultReason) { // DasicsFaultReason.LoadDasicsFault
+    s2_exception_vec(dasicsUCheckFault) := io.in.bits.uop.cf.exceptionVec(dasicsUCheckFault) || io.dasicsResp.mode === ModeU
+    s2_exception_vec(dasicsSCheckFault) := io.in.bits.uop.cf.exceptionVec(dasicsSCheckFault) || io.dasicsResp.mode === ModeS
+    s2_exception_ffreason := io.dasicsResp.dasics_fault
   }
 
   // writeback access fault caused by ecc error / bus error
@@ -471,7 +471,7 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper wi
   io.out.bits.mmio := s2_mmio && EnableMem
   io.out.bits.uop.ctrl.flushPipe := false.B  ///flushPipe logic is useless
   io.out.bits.uop.cf.exceptionVec := s2_exception_vec // cache error not included
-  io.out.bits.uop.cf.fdiFaultReason := s2_exception_ffreason
+  io.out.bits.uop.cf.dasicsFaultReason := s2_exception_ffreason
   // For timing reasons, sometimes we can not let
   // io.out.bits.miss := s2_cache_miss && !s2_exception && !fullForward
   // We use io.dataForwarded instead. It means:
@@ -560,9 +560,9 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
     val tlb = new TlbRequestIO(2)
     val pmp = Flipped(new PMPRespBundle()) // arrive same to tlb now
 
-    //FDI
-    val fdiReq = ValidIO(new  FDIReqBundle())
-    val fdiResp = Flipped(new FDIRespBundle())
+    //Dasics
+    val dasicsReq = ValidIO(new  DasicsReqBundle())
+    val dasicsResp = Flipped(new DasicsRespBundle())
 
     // provide prefetch info
     val prefetch_train = ValidIO(new LsPipelineBundle())
@@ -618,7 +618,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
   load_s1.io.s1_cancel := RegEnable(load_s0.io.s0_cancel, load_s0.io.out.fire)
   load_s1.io.bankConflictAvoidIn := io.bankConflictAvoidIn
   assert(load_s1.io.in.ready)
-  io.fdiReq := load_s1.io.fdiReq
+  io.dasicsReq := load_s1.io.dasicsReq
 
   // provide paddr for lq
   io.lsq.loadPaddrIn.valid := load_s1.io.out.valid
@@ -704,7 +704,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
   load_s2.io.csrCtrl <> io.csrCtrl
   load_s2.io.sentFastUop := io.fastUop.valid
   assert(load_s2.io.in.ready)
-  load_s2.io.fdiResp := io.fdiResp
+  load_s2.io.dasicsResp := io.dasicsResp
 
   // feedback bank conflict / ld-vio check struct hazard to rs
   io.feedbackFast.bits := RegNext(load_s1.io.rsFeedback.bits)   //remove clock-gating for timing

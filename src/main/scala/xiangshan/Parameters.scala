@@ -48,7 +48,7 @@ case class XSCoreParameters
   HasMExtension: Boolean = true,
   HasCExtension: Boolean = true,
   HasNExtension: Boolean = true,
-  HasFDI: Boolean = true,
+  HasDasics: Boolean = true,
   HasDiv: Boolean = true,
   HasICache: Boolean = true,
   HasDCache: Boolean = true,
@@ -275,7 +275,7 @@ trait HasXSParameter {
   val HasMExtension = coreParams.HasMExtension
   val HasCExtension = coreParams.HasCExtension
   val HasNExtension = coreParams.HasNExtension
-  val HasFDI = coreParams.HasFDI
+  val HasDasics = coreParams.HasDasics
   val HasDiv = coreParams.HasDiv
   val HasIcache = coreParams.HasICache
   val HasDcache = coreParams.HasDCache

@@ -125,8 +125,8 @@ class FetchToIBuffer(implicit p: Parameters) extends XSBundle {
   val crossPageIPFFix = Vec(PredictWidth, Bool())
   val triggered    = Vec(PredictWidth, new TriggerCf)
   val mmioFetch = Bool()
-  val fdiUntrusted = Vec(PredictWidth, Bool())
-  val fdiBrResp = new FDIRespDataBundle  // last branch to this instr block is illegal
+  val dasicsUntrusted = Vec(PredictWidth, Bool())
+  val dasicsBrResp = new DasicsRespDataBundle  // last branch to this instr block is illegal
   val lastBranch: UInt = UInt(VAddrBits.W)
 }
 

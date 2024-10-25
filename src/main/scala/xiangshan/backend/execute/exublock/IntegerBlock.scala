@@ -65,5 +65,5 @@ class IntegerBlockImp(outer:IntegerBlock) extends BasicExuBlockImp(outer){
   io.prefetchI := outer.jmps.head.module.io.prefetchI
 
   val jmp_module = outer.jmps.head.module
-  outer.aluMiscs.head.module.io.fdicallJumpExcpIO <> jmp_module.io.fdicallJumpExcpIO
+  outer.aluMiscs.head.module.io.dasicscallJumpExcpIO <> jmp_module.io.dasicscallJumpExcpIO
 }

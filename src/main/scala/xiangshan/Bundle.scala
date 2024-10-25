@@ -40,9 +40,9 @@ import xiangshan.frontend.AllAheadFoldedHistoryOldestBits
 import xs.utils.DataChanged
 import xiangshan.vector._
 import xiangshan.vector.writeback.VmbPtr
-import xiangshan.backend.execute.fu.FDIFaultReason
+import xiangshan.backend.execute.fu.DasicsFaultReason
 import scala.math.max
-import xiangshan.backend.execute.fu.FDIConst
+import xiangshan.backend.execute.fu.DasicsConst
 import xiangshan.backend.execute.fu.csr.HasCSRConst
 
 class ValidUndirectioned[T <: Data](gen: T) extends Bundle {
@@ -99,7 +99,7 @@ class CfiUpdateInfo(implicit p: Parameters) extends XSBundle with HasBPUParamete
 }
 
 // Dequeue DecodeWidth insts from Ibuffer
-class CtrlFlow(implicit p: Parameters) extends XSBundle with FDIConst {
+class CtrlFlow(implicit p: Parameters) extends XSBundle with DasicsConst {
   val instr = UInt(32.W)
   val pc = UInt(VAddrBits.W)
   val foldpc = UInt(MemPredPCWidth.W)
@@ -119,10 +119,10 @@ class CtrlFlow(implicit p: Parameters) extends XSBundle with FDIConst {
   val ssid = UInt(SSIDWidth.W)
   val ftqPtr = new FtqPtr
   val ftqOffset = UInt(log2Up(PredictWidth).W)
-  // needs to be checked by FDI
-  val fdiUntrusted = Bool()
-  // FDI Exception Reason
-  val fdiFaultReason = UInt(FDIFaultWidth.W) 
+  // needs to be checked by Dasics
+  val dasicsUntrusted = Bool()
+  // Dasics Exception Reason
+  val dasicsFaultReason = UInt(DasicsFaultWidth.W) 
   // info of branch fault by last branch
   val lastBranch = ValidUndirectioned(UInt(VAddrBits.W))
   //vector
@@ -543,8 +543,8 @@ class CustomCSRCtrlIO(implicit p: Parameters) extends XSBundle {
   }
   // SPMP
   val spmp_enable = Output(Bool())
-  // FDI
-  val fdi_enable  = Output(Bool())
+  // Dasics
+  val dasics_enable  = Output(Bool())
 }
 
 class DistributedCSRIO(implicit p: Parameters) extends XSBundle {

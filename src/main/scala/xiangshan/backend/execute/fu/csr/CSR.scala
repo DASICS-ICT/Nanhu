@@ -32,7 +32,7 @@ import xiangshan.backend.execute.fu._
 import xiangshan.backend.execute.fu.csr.vcsr._
 import xiangshan.backend.execute.fu.FuOutput
 import xiangshan.cache._
-import xiangshan.backend.execute.fu.FDIFaultReason
+import xiangshan.backend.execute.fu.DasicsFaultReason
 import freechips.rocketchip.tile.XLen
 
 // Trigger Tdata1 bundles
@@ -119,7 +119,7 @@ class CSRFileIO(implicit p: Parameters) extends XSBundle {
 
 class CSR(implicit p: Parameters) extends FUWithRedirect
   with HasCSRConst with PMPMethod with PMAMethod
-  with HasTriggerConst  with SdtrigExt with DebugCSR with HasPerfLogging with FDIMethod {
+  with HasTriggerConst  with SdtrigExt with DebugCSR with HasPerfLogging with DasicsMethod {
   val csrio = IO(new CSRFileIO)
 
   val uopIn = io.in.bits.uop
@@ -134,7 +134,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     io.in.bits.src(0),
     io.in.bits.uop.ctrl.imm,
     io.in.bits.uop.ctrl.fuOpType,
-    io.in.bits.uop.cf.fdiUntrusted
+    io.in.bits.uop.cf.dasicsUntrusted
   )
 
   val csrr_sc_ignoreW = (uopIn.ctrl.fuOpType === CSROpType.set || uopIn.ctrl.fuOpType === CSROpType.clr) && (uopIn.psrc(0) === 0.U)
@@ -350,40 +350,40 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val pmpMapping = pmp_gen_mapping(pmp_init, NumPMP, PmpcfgBase, PmpaddrBase, pmp)
   val pmaMapping = pmp_gen_mapping(pma_init, NumPMA, PmacfgBase, PmaaddrBase, pma)
 
-  // FDI Mapping
-  val fdiMainCfg: UInt = RegInit(UInt(XLEN.W), 0.U)
-  val fdiSMainCfgMask: UInt = "h3ff".U(XLEN.W)
-  val fdiUMainCfgMask: UInt = "h3e".U(XLEN.W)
-  val fdiSMainBoundLo, fdiSMainBoundHi = RegInit(UInt(XLEN.W), 0.U)
-  val fdiUMainBoundLo, fdiUMainBoundHi = RegInit(UInt(XLEN.W), 0.U)
+  // Dasics Mapping
+  val dasicsMainCfg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsSMainCfgMask: UInt = "h3ff".U(XLEN.W)
+  val dasicsUMainCfgMask: UInt = "h3e".U(XLEN.W)
+  val dasicsSMainBoundLo, dasicsSMainBoundHi = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsUMainBoundLo, dasicsUMainBoundHi = RegInit(UInt(XLEN.W), 0.U)
 
-  val fdiCfg = Wire(new FDIMainCfg())
-  fdiCfg.gen(fdiMainCfg)
-  csrio.customCtrl.fdi_enable := Mux(priviledgeMode === ModeU, fdiCfg.uEnable,
-                                 Mux(priviledgeMode === ModeS, fdiCfg.sEnable, 
+  val dasicsCfg = Wire(new DasicsMainCfg())
+  dasicsCfg.gen(dasicsMainCfg)
+  csrio.customCtrl.dasics_enable := Mux(priviledgeMode === ModeU, dasicsCfg.uEnable,
+                                 Mux(priviledgeMode === ModeS, dasicsCfg.sEnable, 
                                      false.B))
 
-  val fdiMainCallReg: UInt = RegInit(UInt(XLEN.W), 0.U)
-  val fdiReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
-  val fdiFReasonReg:  UInt = RegInit(UInt(FDIFaultWidth.W), 0.U)
-  val fdiAZoneReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
-  val fdiMemBoundRegs: Vec[FDIEntry] = Wire(Vec(NumFDIMemBounds, new FDIEntry()))  // just used for method parameter
-  val fdiJumpBoundRegs: Vec[FDIJumpEntry] = Wire(Vec(NumFDIJumpBounds, new FDIJumpEntry()))  
-  val fdiMapping: Map[Int, (UInt, UInt, UInt => UInt, UInt, UInt => UInt)] = FDIGenMemMapping(
-    mem_init = FDIMemInit, memCfgBase = FDILibCfgBase, memBoundBase = FDILibBoundBase, memEntries = fdiMemBoundRegs
-  ) ++ FDIGenJumpMapping(
-    jump_init = FDIMemInit, jumpCfgBase = FDIJmpCfgBase, jumpBoundBase = FDIJmpBoundBase, jumpEntries = fdiJumpBoundRegs
+  val dasicsMainCallReg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsFReasonReg:  UInt = RegInit(UInt(DasicsFaultWidth.W), 0.U)
+  val dasicsAZoneReturnPcReg: UInt = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsMemBoundRegs: Vec[DasicsEntry] = Wire(Vec(NumDasicsMemBounds, new DasicsEntry()))  // just used for method parameter
+  val dasicsJumpBoundRegs: Vec[DasicsJumpEntry] = Wire(Vec(NumDasicsJumpBounds, new DasicsJumpEntry()))  
+  val dasicsMapping: Map[Int, (UInt, UInt, UInt => UInt, UInt, UInt => UInt)] = DasicsGenMemMapping(
+    mem_init = DasicsMemInit, memCfgBase = DasicsLibCfgBase, memBoundBase = DasicsLibBoundBase, memEntries = dasicsMemBoundRegs
+  ) ++ DasicsGenJumpMapping(
+    jump_init = DasicsMemInit, jumpCfgBase = DasicsJmpCfgBase, jumpBoundBase = DasicsJmpBoundBase, jumpEntries = dasicsJumpBoundRegs
   ) ++ Map(
-    MaskedRegMap(FDISMainCfg, fdiMainCfg, fdiSMainCfgMask),
-    MaskedRegMap(FDISMainBoundLo, fdiSMainBoundLo),
-    MaskedRegMap(FDISMainBoundHi, fdiSMainBoundHi),
-    MaskedRegMap(FDIUMainCfg, fdiMainCfg, wmask = fdiUMainCfgMask, rmask = fdiUMainCfgMask),
-    MaskedRegMap(FDIUMainBoundLo, fdiUMainBoundLo),
-    MaskedRegMap(FDIUMainBoundHi, fdiUMainBoundHi),
-    MaskedRegMap(FDIMainCall, fdiMainCallReg),
-    MaskedRegMap(FDIReturnPc, fdiReturnPcReg),
-    MaskedRegMap(FDIActiveZoneReturnPc, fdiAZoneReturnPcReg),
-    MaskedRegMap(FDIFReason, fdiFReasonReg)
+    MaskedRegMap(DasicsSMainCfg, dasicsMainCfg, dasicsSMainCfgMask),
+    MaskedRegMap(DasicsSMainBoundLo, dasicsSMainBoundLo),
+    MaskedRegMap(DasicsSMainBoundHi, dasicsSMainBoundHi),
+    MaskedRegMap(DasicsUMainCfg, dasicsMainCfg, wmask = dasicsUMainCfgMask, rmask = dasicsUMainCfgMask),
+    MaskedRegMap(DasicsUMainBoundLo, dasicsUMainBoundLo),
+    MaskedRegMap(DasicsUMainBoundHi, dasicsUMainBoundHi),
+    MaskedRegMap(DasicsMainCall, dasicsMainCallReg),
+    MaskedRegMap(DasicsReturnPc, dasicsReturnPcReg),
+    MaskedRegMap(DasicsActiveZoneReturnPc, dasicsAZoneReturnPcReg),
+    MaskedRegMap(DasicsFReason, dasicsFReasonReg)
   )
 
   val spmpSwitch = RegInit(0.U(XLEN.W))
@@ -891,7 +891,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
                 (if (HasFPU) fcsrMapping else Nil) ++
                 (if (HasCustomCSRCacheOp) cacheopMapping else Nil) ++ 
                 (if (hasVector) vcsrMapping else Nil) ++
-                (if (HasFDI) fdiMapping else Nil) ++
+                (if (HasDasics) dasicsMapping else Nil) ++
                 (if (HasNExtension) userMapping else Nil)
 
   println("XiangShan CSR Lists")
@@ -911,12 +911,12 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val addrInNExt = (addr === Ustatus.U) || (addr === Uie.U) || (addr === Utvec.U) ||
                    (addr >= Uscratch.U) && (addr <= Utimer.U)
 
-  val addrInFDI =  (addr >= FDIUMainCfg.U) && (addr <= FDIUMainBoundHi.U) || 
-    (addr >= FDISMainCfg.U) && (addr <= FDISMainBoundHi.U) ||
-    (addr >= FDIMainCall.U) && (addr <= FDIFReason.U) ||
-    (addr >= FDILibBoundBase.U) && (addr < (FDILibBoundBase + NumFDIMemBounds * 2).U) || 
-    (addr >= FDIJmpBoundBase.U) && (addr <= FDIJmpCfgBase.U) || 
-    addr === FDILibCfgBase.U
+  val addrInDasics =  (addr >= DasicsUMainCfg.U) && (addr <= DasicsUMainBoundHi.U) || 
+    (addr >= DasicsSMainCfg.U) && (addr <= DasicsSMainBoundHi.U) ||
+    (addr >= DasicsMainCall.U) && (addr <= DasicsFReason.U) ||
+    (addr >= DasicsLibBoundBase.U) && (addr < (DasicsLibBoundBase + NumDasicsMemBounds * 2).U) || 
+    (addr >= DasicsJmpBoundBase.U) && (addr <= DasicsJmpCfgBase.U) || 
+    addr === DasicsLibCfgBase.U
 
   val addrInMPK = (addr === Spkctl.U) || (addr === Spkrs.U) || (addr === Upkru.U)
 
@@ -937,8 +937,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val perfcntPermitted = perfcntPermissionCheck(addr, priviledgeMode, mcounteren, scounteren)
   val vcsrPermitted = vcsrAccessPermissionCheck(addr, wen, mstatusStruct.vs)
   val fcsrPermitted = fcsrAccessPermissionCheck(addr, wen, mstatusStruct.fs)
-  val FDIPermitted = !(CSROpType.needAccess(func) && (addrInFDI || addrInNExt || addrInMPK) && isUntrusted)
-  val permitted = Mux(addrInPerfCnt && addr =/= Mip.U, perfcntPermitted, modePermitted) && accessPermitted && vcsrPermitted && fcsrPermitted && FDIPermitted
+  val DasicsPermitted = !(CSROpType.needAccess(func) && (addrInDasics || addrInNExt || addrInMPK) && isUntrusted)
+  val permitted = Mux(addrInPerfCnt && addr =/= Mip.U, perfcntPermitted, modePermitted) && accessPermitted && vcsrPermitted && fcsrPermitted && DasicsPermitted
   vtypeNoException := vcsrPermitted
 
   MaskedRegMap.generate(mapping, addr, rdata, wen && permitted, wdata)
@@ -1150,14 +1150,14 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val csrExceptionVec = WireInit(cfIn.exceptionVec)
   csrExceptionVec(breakPoint) := io.in.valid && isEbreak
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
-  csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall && (!isUntrusted || isUntrusted && fdiCfg.closeSEcallFault)
-  csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall && (!isUntrusted || isUntrusted && fdiCfg.closeUEcallFault)
+  csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall && (!isUntrusted || isUntrusted && dasicsCfg.closeSEcallFault)
+  csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall && (!isUntrusted || isUntrusted && dasicsCfg.closeUEcallFault)
 
-  // handle fdi ecall fault  
-  val hasFDIUEcallFault = priviledgeMode === ModeU && io.in.valid && isEcall && isUntrusted && !fdiCfg.closeUEcallFault
-  csrExceptionVec(fdiUCheckFault) := cfIn.exceptionVec(fdiUCheckFault) || hasFDIUEcallFault
-  val hasFDISEcallFault = priviledgeMode === ModeS && io.in.valid && isEcall && isUntrusted && !fdiCfg.closeSEcallFault
-  csrExceptionVec(fdiSCheckFault) := cfIn.exceptionVec(fdiSCheckFault) || hasFDISEcallFault
+  // handle dasics ecall fault  
+  val hasDasicsUEcallFault = priviledgeMode === ModeU && io.in.valid && isEcall && isUntrusted && !dasicsCfg.closeUEcallFault
+  csrExceptionVec(dasicsUCheckFault) := cfIn.exceptionVec(dasicsUCheckFault) || hasDasicsUEcallFault
+  val hasDasicsSEcallFault = priviledgeMode === ModeS && io.in.valid && isEcall && isUntrusted && !dasicsCfg.closeSEcallFault
+  csrExceptionVec(dasicsSCheckFault) := cfIn.exceptionVec(dasicsSCheckFault) || hasDasicsSEcallFault
 
   // Trigger an illegal instr exception when:
   // * unimplemented csr is being read/written
@@ -1165,8 +1165,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrExceptionVec(illegalInstr) := isIllegalAddr || isIllegalAccess || isIllegalPrivOp
 
   cfOut.exceptionVec := csrExceptionVec
-  cfOut.fdiFaultReason :=   Mux((hasFDISEcallFault || hasFDIUEcallFault) && cfIn.fdiFaultReason < FDIFaultReason.EcallFDIFault,
-                                 FDIFaultReason.EcallFDIFault, cfIn.fdiFaultReason)
+  cfOut.dasicsFaultReason :=   Mux((hasDasicsSEcallFault || hasDasicsUEcallFault) && cfIn.dasicsFaultReason < DasicsFaultReason.EcallDasicsFault,
+                                 DasicsFaultReason.EcallDasicsFault, cfIn.dasicsFaultReason)
 
   XSDebug(io.in.valid, s"Debug Mode: an Ebreak is executed, ebreak cause enter-debug-mode exception ? ${raiseDebugException}\n")
 
@@ -1235,7 +1235,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   // exceptions from rob need to handle
   val exceptionVecFromRob   = csrio.exception.bits.uop.cf.exceptionVec
-  val fdiFaultReasonFromRob = csrio.exception.bits.uop.cf.fdiFaultReason
+  val dasicsFaultReasonFromRob = csrio.exception.bits.uop.cf.dasicsFaultReason
   val hasException          = csrio.exception.valid && !csrio.exception.bits.isInterrupt
   val hasInstrPageFault     = hasException && exceptionVecFromRob(instrPageFault)
   val hasLoadPageFault      = hasException && exceptionVecFromRob(loadPageFault)
@@ -1247,22 +1247,22 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val hasStoreAccessFault   = hasException && exceptionVecFromRob(storeAccessFault)
   val hasBreakPoint         = hasException && exceptionVecFromRob(breakPoint)
 
-  val hasFdiUCheckFault     = hasException && exceptionVecFromRob(fdiUCheckFault)
-  val hasFdiULoadFault      = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadFDIFault
-  val hasFdiUStoreFault     = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreFDIFault
-  val hasFdiUJumpFault      = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault
-  val hasFdiSCheckFault     = hasException && exceptionVecFromRob(fdiSCheckFault)
-  val hasFdiSLoadFault      = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadFDIFault
-  val hasFdiSStoreFault     = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreFDIFault
-  val hasFdiSJumpFault      = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault
+  val hasDasicsUCheckFault     = hasException && exceptionVecFromRob(dasicsUCheckFault)
+  val hasDasicsULoadFault      = hasDasicsUCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.LoadDasicsFault
+  val hasDasicsUStoreFault     = hasDasicsUCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.StoreDasicsFault
+  val hasDasicsUJumpFault      = hasDasicsUCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.JumpDasicsFault
+  val hasDasicsSCheckFault     = hasException && exceptionVecFromRob(dasicsSCheckFault)
+  val hasDasicsSLoadFault      = hasDasicsSCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.LoadDasicsFault
+  val hasDasicsSStoreFault     = hasDasicsSCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.StoreDasicsFault
+  val hasDasicsSJumpFault      = hasDasicsSCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.JumpDasicsFault
 
-  val hasPKULoadPageFault   = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadMPKFault
-  val hasPKUStorePageFault  = hasFdiUCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreMPKFault
-  val hasPKSLoadPageFault   = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.LoadMPKFault
-  val hasPKSStorePageFault  = hasFdiSCheckFault && fdiFaultReasonFromRob === FDIFaultReason.StoreMPKFault
-    // interrupt and fdi jump both occurs
-  val hasFdiJumpIntr        = (hasIntr && 
-                               (exceptionVecFromRob(fdiUCheckFault) || exceptionVecFromRob(fdiSCheckFault)) && fdiFaultReasonFromRob === FDIFaultReason.JumpFDIFault)
+  val hasPKULoadPageFault   = hasDasicsUCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.LoadMPKFault
+  val hasPKUStorePageFault  = hasDasicsUCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.StoreMPKFault
+  val hasPKSLoadPageFault   = hasDasicsSCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.LoadMPKFault
+  val hasPKSStorePageFault  = hasDasicsSCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.StoreMPKFault
+    // interrupt and dasics jump both occurs
+  val hasDasicsJumpIntr        = (hasIntr && 
+                               (exceptionVecFromRob(dasicsUCheckFault) || exceptionVecFromRob(dasicsSCheckFault)) && dasicsFaultReasonFromRob === DasicsFaultReason.JumpDasicsFault)
 
   val hasSingleStep         = hasException && csrio.exception.bits.uop.ctrl.singleStep
   val hasTriggerFire        = hasException && csrio.exception.bits.uop.cf.trigger.canFire
@@ -1281,12 +1281,12 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   val hasExceptionVec = csrio.exception.bits.uop.cf.exceptionVec
   val regularExceptionVec = hasExceptionVec.take(16)
-  val fdiExceptionVec = ExceptionNO.selectFDI(hasExceptionVec)
+  val dasicsExceptionVec = ExceptionNO.selectDasics(hasExceptionVec)
   val regularExceptionNO = ExceptionNO.prioritiesRegular.foldRight(0.U)((i: Int, sum: UInt) => Mux(regularExceptionVec(i), i.U, sum))
-  val fdiExceptionNo = ExceptionNO.fdiSet.foldRight(0.U)((i: Int, sum: UInt) => Mux(fdiExceptionVec(i), (i + FDIExcOffset).U, sum))
+  val dasicsExceptionNo = ExceptionNO.dasicsSet.foldRight(0.U)((i: Int, sum: UInt) => Mux(dasicsExceptionVec(i), (i + DasicsExcOffset).U, sum))
 
   val exceptionNO = Mux(hasSingleStep || hasTriggerFire, 3.U,
-    Mux(regularExceptionVec.reduce(_||_), regularExceptionNO, fdiExceptionNo))
+    Mux(regularExceptionVec.reduce(_||_), regularExceptionNO, dasicsExceptionNo))
   val causeNO = (hasIntr << (XLEN-1)).asUInt | Mux(hasIntr, intrNOReg, exceptionNO)
 
   val hasExceptionIntr = csrio.exception.valid
@@ -1329,16 +1329,16 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     hasStoreAccessFault,
     hasLoadAddrMisalign,
     hasStoreAddrMisalign,
-    hasFdiSLoadFault,
-    hasFdiSStoreFault,
-    hasFdiSJumpFault,
-    hasFdiULoadFault,
-    hasFdiUStoreFault,
-    hasFdiUJumpFault
+    hasDasicsSLoadFault,
+    hasDasicsSStoreFault,
+    hasDasicsSJumpFault,
+    hasDasicsULoadFault,
+    hasDasicsUStoreFault,
+    hasDasicsUJumpFault
   )).asUInt.orR
   when (RegNext(RegNext(updateTval))) {
     val tval = Mux(
-      RegNext(RegNext((hasFdiUJumpFault || hasFdiSJumpFault) && csrio.exception.bits.uop.cf.lastBranch.valid)),
+      RegNext(RegNext((hasDasicsUJumpFault || hasDasicsSJumpFault) && csrio.exception.bits.uop.cf.lastBranch.valid)),
       RegNext(RegNext(csrio.exception.bits.uop.cf.pc)),
       Mux(
         RegNext(RegNext(hasInstrPageFault || hasInstrAccessFault)),
@@ -1404,8 +1404,8 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     val dcsrNew = WireInit(dcsr.asTypeOf(new DcsrStruct))
     val debugModeNew = WireInit(debugMode)
     val lastBranchInfo = WireInit(csrio.exception.bits.uop.cf.lastBranch)
-    val hasFdiBrFault = (hasFdiUJumpFault || hasFdiSJumpFault) && lastBranchInfo.valid
-    val hasFdiBrIntr = hasFdiJumpIntr && lastBranchInfo.valid
+    val hasDasicsBrFault = (hasDasicsUJumpFault || hasDasicsSJumpFault) && lastBranchInfo.valid
+    val hasDasicsBrIntr = hasDasicsJumpIntr && lastBranchInfo.valid
     when (hasDebugTrap && !debugMode) {
       import DcsrStruct._
       debugModeNew := true.B
@@ -1429,7 +1429,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
       //do nothing
     }.elsewhen (delegS && delegU) {
       ucause := causeNO
-      uepc := Mux(hasFdiBrFault || hasFdiBrIntr,
+      uepc := Mux(hasDasicsBrFault || hasDasicsBrIntr,
                 lastBranchInfo.bits,
                 Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC))
       mstatusNew.pie.u := mstatusOld.ie.u
@@ -1438,7 +1438,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
       when (clearTval) { utval := 0.U }
     }.elsewhen (delegS && !delegU) {
       scause := causeNO
-      sepc := Mux(hasFdiBrFault || hasFdiBrIntr,
+      sepc := Mux(hasDasicsBrFault || hasDasicsBrIntr,
                 lastBranchInfo.bits,
                 Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC))
       mstatusNew.spp := priviledgeMode
@@ -1448,7 +1448,7 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
       when (clearTval) { stval := 0.U }
     }.otherwise {
       mcause := causeNO
-      mepc := Mux(hasFdiBrFault || hasFdiBrIntr,
+      mepc := Mux(hasDasicsBrFault || hasDasicsBrIntr,
                 lastBranchInfo.bits,
                 Mux(hasInstrPageFault || hasInstrAccessFault, iexceptionPC, dexceptionPC))
       mstatusNew.mpp := priviledgeMode
@@ -1463,9 +1463,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
 
   XSDebug(hasExceptionIntr && delegS, "sepc is writen!!! pc:%x\n", cfIn.pc)
 
-  // save fault reason in FDIFReason Reg from ROB
-  when (hasFdiUCheckFault || hasFdiSCheckFault){
-    fdiFReasonReg := fdiFaultReasonFromRob
+  // save fault reason in DasicsFReason Reg from ROB
+  when (hasDasicsUCheckFault || hasDasicsSCheckFault){
+    dasicsFReasonReg := dasicsFaultReasonFromRob
   }
 
   // Distributed CSR update req
@@ -1555,25 +1555,25 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
     difftestCSR.sideleg := sideleg
     difftestCSR.medeleg := medeleg
     difftestCSR.sedeleg := sedeleg
-    difftestCSR.fdiMainCfg := fdiMainCfg
-    difftestCSR.fdiSMBoundLo := fdiSMainBoundLo
-    difftestCSR.fdiSMBoundHi := fdiSMainBoundHi
-    difftestCSR.fdiUMBoundLo := fdiUMainBoundLo
-    difftestCSR.fdiUMBoundHi := fdiUMainBoundHi
-    difftestCSR.fdiLibCfg := ZeroExt(VecInit(fdiMemBoundRegs.map(_.cfg)).asUInt, XLEN)
-    for (i <- 0 until NumFDIMemBounds) {
-      difftestCSR.fdiLibBound(i * 2) := fdiMemBoundRegs(i).boundLo
-      difftestCSR.fdiLibBound(i * 2 + 1) := fdiMemBoundRegs(i).boundHi
+    difftestCSR.dasicsMainCfg := dasicsMainCfg
+    difftestCSR.dasicsSMBoundLo := dasicsSMainBoundLo
+    difftestCSR.dasicsSMBoundHi := dasicsSMainBoundHi
+    difftestCSR.dasicsUMBoundLo := dasicsUMainBoundLo
+    difftestCSR.dasicsUMBoundHi := dasicsUMainBoundHi
+    difftestCSR.dasicsLibCfg := ZeroExt(VecInit(dasicsMemBoundRegs.map(_.cfg)).asUInt, XLEN)
+    for (i <- 0 until NumDasicsMemBounds) {
+      difftestCSR.dasicsLibBound(i * 2) := dasicsMemBoundRegs(i).boundLo
+      difftestCSR.dasicsLibBound(i * 2 + 1) := dasicsMemBoundRegs(i).boundHi
     }
-    difftestCSR.fdiJumpCfg := ZeroExt(VecInit(fdiJumpBoundRegs.map(_.cfg.asTypeOf(UInt(16.W)))).asUInt, XLEN)
-    for (i <- 0 until NumFDIJumpBounds) {
-      difftestCSR.fdiJumpBound(i * 2) := fdiJumpBoundRegs(i).boundLo
-      difftestCSR.fdiJumpBound(i * 2 + 1) := fdiJumpBoundRegs(i).boundHi
+    difftestCSR.dasicsJumpCfg := ZeroExt(VecInit(dasicsJumpBoundRegs.map(_.cfg.asTypeOf(UInt(16.W)))).asUInt, XLEN)
+    for (i <- 0 until NumDasicsJumpBounds) {
+      difftestCSR.dasicsJumpBound(i * 2) := dasicsJumpBoundRegs(i).boundLo
+      difftestCSR.dasicsJumpBound(i * 2 + 1) := dasicsJumpBoundRegs(i).boundHi
     }
-    difftestCSR.fdiMainCall := fdiMainCallReg
-    difftestCSR.fdiReturnPC := fdiReturnPcReg
-    difftestCSR.fdiAZoneReturnPC := fdiAZoneReturnPcReg
-    difftestCSR.fdiFReason  := ZeroExt(fdiFReasonReg, XLEN)
+    difftestCSR.dasicsMainCall := dasicsMainCallReg
+    difftestCSR.dasicsReturnPC := dasicsReturnPcReg
+    difftestCSR.dasicsAZoneReturnPC := dasicsAZoneReturnPcReg
+    difftestCSR.dasicsFReason  := ZeroExt(dasicsFReasonReg, XLEN)
     difftestCSR.upkru := upkru
     difftestCSR.spkrs := spkrs
     difftestCSR.spkctl := spkctl
