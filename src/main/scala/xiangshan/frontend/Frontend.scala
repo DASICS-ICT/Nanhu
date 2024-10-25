@@ -24,7 +24,7 @@ import xs.utils._
 import xiangshan._
 import xiangshan.backend.execute.fu.csr.PFEvent
 import xiangshan.backend.execute.fu.fence.{FenceIBundle, SfenceBundle}
-import xiangshan.backend.execute.fu.{PMP, PMPChecker, PMPReqBundle, FDITagger, FDIBranchChecker}
+import xiangshan.backend.execute.fu.{PMP, PMPChecker, PMPReqBundle, DasicsTagger, DasicsBranchChecker}
 import xiangshan.cache.mmu._
 import xiangshan.frontend.icache._
 import xs.utils.perf.HasPerfLogging
@@ -106,20 +106,20 @@ class FrontendImp (outer: Frontend) extends LazyModuleImp(outer)
   icache.io.pmp(2).resp <> pmp_check(2).resp
   ifu.io.pmp.resp <> pmp_check(3).resp
 
-  // FDITagger
-  val fdiTagger: FDITagger = Module(new FDITagger())
-  fdiTagger.io.distribute_csr := csrCtrl.distribute_csr
-  fdiTagger.io.mode := tlbCsr.priv.imode
-  fdiTagger.io.addr := ifu.io.fdi.startAddr
-  ifu.io.fdi.notTrusted := fdiTagger.io.notTrusted
-  // fdi branch checker
-  val fdiBrChecker: FDIBranchChecker = Module(new FDIBranchChecker())
-  fdiBrChecker.io.distribute_csr := csrCtrl.distribute_csr
-  fdiBrChecker.io.mode := tlbCsr.priv.imode
-  fdiBrChecker.io.valid := ifu.io.fdi.lastBranch.valid
-  fdiBrChecker.io.lastBranch := ifu.io.fdi.lastBranch.bits
-  fdiBrChecker.io.target := ifu.io.fdi.startAddr
-  ifu.io.fdi.resp := fdiBrChecker.io.resp
+  // DasicsTagger
+  val dasicsTagger: DasicsTagger = Module(new DasicsTagger())
+  dasicsTagger.io.distribute_csr := csrCtrl.distribute_csr
+  dasicsTagger.io.mode := tlbCsr.priv.imode
+  dasicsTagger.io.addr := ifu.io.dasics.startAddr
+  ifu.io.dasics.notTrusted := dasicsTagger.io.notTrusted
+  // dasics branch checker
+  val dasicsBrChecker: DasicsBranchChecker = Module(new DasicsBranchChecker())
+  dasicsBrChecker.io.distribute_csr := csrCtrl.distribute_csr
+  dasicsBrChecker.io.mode := tlbCsr.priv.imode
+  dasicsBrChecker.io.valid := ifu.io.dasics.lastBranch.valid
+  dasicsBrChecker.io.lastBranch := ifu.io.dasics.lastBranch.bits
+  dasicsBrChecker.io.target := ifu.io.dasics.startAddr
+  ifu.io.dasics.resp := dasicsBrChecker.io.resp
 
   // val tlb_req_arb     = Module(new Arbiter(new TlbReq, 2))
   // tlb_req_arb.io.in(0) <> ifu.io.iTLBInter.req

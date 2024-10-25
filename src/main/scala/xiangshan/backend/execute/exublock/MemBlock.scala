@@ -497,22 +497,22 @@ class MemBlockImp(outer: MemBlock) extends BasicExuBlockImp(outer)
     dtlb_st.foreach(_.ptw.resp.valid := ptw_resp_v && Cat(ptw_resp_next.vector.drop(ld_tlb_ports)).orR)
   }
 
-  // fdi memory access check
-  val fdi = Module(new MemFDI())
-  fdi.io.distribute_csr <> csrCtrl.distribute_csr
+  // dasics memory access check
+  val dasics = Module(new MemDasics())
+  dasics.io.distribute_csr <> csrCtrl.distribute_csr
 
-  private val fdiCheckers = Seq.fill(exuParameters.LduCnt + exuParameters.StuCnt)(Module(new FDIMemChecker()))
-  private val fdiCheckersIOs = fdiCheckers.map(_.io)
+  private val dasicsCheckers = Seq.fill(exuParameters.LduCnt + exuParameters.StuCnt)(Module(new DasicsMemChecker()))
+  private val dasicsCheckersIOs = dasicsCheckers.map(_.io)
 
-  val memFDIReq  = storeUnits.map(_.io.fdiReq) ++ loadUnits.map(_.io.fdiReq)
-  val memFDIResp = storeUnits.map(_.io.fdiResp) ++ loadUnits.map(_.io.fdiResp)
+  val memDasicsReq  = storeUnits.map(_.io.dasicsReq) ++ loadUnits.map(_.io.dasicsReq)
+  val memDasicsResp = storeUnits.map(_.io.dasicsResp) ++ loadUnits.map(_.io.dasicsResp)
 
-  for( (dchecker,index) <- fdiCheckersIOs.zipWithIndex){
+  for( (dchecker,index) <- dasicsCheckersIOs.zipWithIndex){
      dchecker.mode := csrCtrl.mode
-     dchecker.mainCfg := fdi.io.mainCfg
-     dchecker.resource := fdi.io.entries
-     dchecker.req := memFDIReq(index)
-     memFDIResp(index) := dchecker.resp
+     dchecker.mainCfg := dasics.io.mainCfg
+     dchecker.resource := dasics.io.entries
+     dchecker.req := memDasicsReq(index)
+     memDasicsResp(index) := dchecker.resp
   }
 
   // pmp

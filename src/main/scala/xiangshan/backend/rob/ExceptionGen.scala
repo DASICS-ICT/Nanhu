@@ -25,13 +25,13 @@ import chisel3._
 import xiangshan.backend.issue.SelectPolicy
 import xiangshan.{ExceptionVec, Redirect, TriggerCf, XSBundle, XSModule}
 import xs.utils.{HasCircularQueuePtrHelper, ParallelPriorityMux}
-import xiangshan.backend.execute.fu.FDIConst
+import xiangshan.backend.execute.fu.DasicsConst
 
-class RobExceptionInfo(implicit p: Parameters) extends XSBundle with FDIConst{
+class RobExceptionInfo(implicit p: Parameters) extends XSBundle with DasicsConst{
   // val valid = Bool()
   val robIdx = new RobPtr
   val exceptionVec = ExceptionVec()
-  val fdiFaultReason = UInt(FDIFaultWidth.W)
+  val dasicsFaultReason = UInt(DasicsFaultWidth.W)
   val singleStep = Bool() // TODO add frontend hit beneath
   val crossPageIPFFix = Bool()
   val trigger = new TriggerCf
