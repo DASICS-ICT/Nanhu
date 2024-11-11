@@ -945,7 +945,6 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrio.customCtrl.distribute_csr.w.valid := wen && permitted
   csrio.customCtrl.distribute_csr.w.bits.data := wdata
   csrio.customCtrl.distribute_csr.w.bits.addr := addr
-  csrio.customCtrl.mode := priviledgeMode
   // Fix Mip/Sip/Uip write
   val fixMapping = Map(
     MaskedRegMap(Mip, mipReg.asUInt, mipFixMask),
