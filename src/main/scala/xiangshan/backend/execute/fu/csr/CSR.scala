@@ -1153,9 +1153,9 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall && (!isUntrusted || isUntrusted && dasicsCfg.closeUEcallFault)
 
   // handle dasics ecall fault  
-  val hasDasicsUEcallFault = priviledgeMode === ModeU && io.in.valid && isEcall && isUntrusted && !dasicsCfg.closeUEcallFault
+  val hasDasicsUEcallFault = HasDasics.B && priviledgeMode === ModeU && io.in.valid && isEcall && isUntrusted && !dasicsCfg.closeUEcallFault
   csrExceptionVec(dasicsUCheckFault) := cfIn.exceptionVec(dasicsUCheckFault) || hasDasicsUEcallFault
-  val hasDasicsSEcallFault = priviledgeMode === ModeS && io.in.valid && isEcall && isUntrusted && !dasicsCfg.closeSEcallFault
+  val hasDasicsSEcallFault = HasDasics.B && priviledgeMode === ModeS && io.in.valid && isEcall && isUntrusted && !dasicsCfg.closeSEcallFault
   csrExceptionVec(dasicsSCheckFault) := cfIn.exceptionVec(dasicsSCheckFault) || hasDasicsSEcallFault
 
   // Trigger an illegal instr exception when:
@@ -1246,11 +1246,11 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
   val hasStoreAccessFault   = hasException && exceptionVecFromRob(storeAccessFault)
   val hasBreakPoint         = hasException && exceptionVecFromRob(breakPoint)
 
-  val hasDasicsUCheckFault     = hasException && exceptionVecFromRob(dasicsUCheckFault)
+  val hasDasicsUCheckFault     = HasDasics.B && hasException && exceptionVecFromRob(dasicsUCheckFault)
   val hasDasicsULoadFault      = hasDasicsUCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.LoadDasicsFault
   val hasDasicsUStoreFault     = hasDasicsUCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.StoreDasicsFault
   val hasDasicsUJumpFault      = hasDasicsUCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.JumpDasicsFault
-  val hasDasicsSCheckFault     = hasException && exceptionVecFromRob(dasicsSCheckFault)
+  val hasDasicsSCheckFault     = HasDasics.B && hasException && exceptionVecFromRob(dasicsSCheckFault)
   val hasDasicsSLoadFault      = hasDasicsSCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.LoadDasicsFault
   val hasDasicsSStoreFault     = hasDasicsSCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.StoreDasicsFault
   val hasDasicsSJumpFault      = hasDasicsSCheckFault && dasicsFaultReasonFromRob === DasicsFaultReason.JumpDasicsFault
