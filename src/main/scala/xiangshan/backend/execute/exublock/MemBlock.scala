@@ -500,7 +500,7 @@ class MemBlockImp(outer: MemBlock) extends BasicExuBlockImp(outer)
   val memDasicsResp = storeUnits.map(_.io.dasicsResp) ++ loadUnits.map(_.io.dasicsResp)
 
   for( (dchecker,index) <- dasicsCheckersIOs.zipWithIndex){
-     dchecker.mode := csrCtrl.mode
+     dchecker.mode := tlbcsr_dup.last.priv.dmode
      dchecker.mainCfg := dasics.io.mainCfg
      dchecker.resource := dasics.io.entries
      dchecker.req := memDasicsReq(index)

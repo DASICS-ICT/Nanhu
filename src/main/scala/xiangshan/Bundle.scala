@@ -528,8 +528,7 @@ class CustomCSRCtrlIO(implicit p: Parameters) extends XSBundle {
 
   // distribute csr write signal
   val distribute_csr = new DistributedCSRIO()
-  // csr mode register
-  val mode = Output(UInt(2.W))
+
   // TODO: move it to a new bundle, since single step is not a custom control signal
   val singlestep = Output(Bool())
   val frontend_trigger = new FrontendTdataDistributeIO()
