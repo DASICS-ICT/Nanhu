@@ -256,7 +256,8 @@ class WithNKBL2
         echoField = Seq(coupledL2.DirtyField()),
         elaboratedTopDown = false,
         enablePerf = false,
-        hasMbist = p.hasMbist,
+        hasMbist = false, //p.hasMbist,
+        enableClockGate = false,
         hasShareBus = p.hasShareBus,
         prefetch = Some(coupledL2.prefetch.PrefetchReceiverParams()),
         /*
@@ -276,8 +277,7 @@ class WithNKBL2
         // prefetch = None
         // enablePerf = true,
         // sramDepthDiv = 2,
-        // tagECC = None,
-        // dataECC = None,
+        dataEccCode = Some("none")
         // hasShareBus = false,
         // simulation = !site(DebugOptionsKey).FPGAPlatform
       )),
@@ -315,10 +315,10 @@ class WithNKBL3(n: Int, ways: Int = 8, inclusive: Boolean = true, banks: Int = 1
         reqField = Seq(xs.utils.tl.ReqSourceField()),
         sramClkDivBy2 = true,
         sramDepthDiv = 8,
-        hasMbist = up(SoCParamsKey).hasMbist,
+        hasMbist = false, //up(SoCParamsKey).hasMbist,
         hasShareBus = up(SoCParamsKey).hasShareBus,
-        tagECC = Some("secded"),
-        dataECC = Some("secded"),
+        tagECC = None, //Some("secded"),
+        dataECC = None, //Some("secded"),
         simulation = !site(DebugOptionsKey).FPGAPlatform
       ))
     )
@@ -344,8 +344,8 @@ class MediumConfig(n: Int = 1) extends Config(
 )
 
 class DefaultConfig(n: Int = 1) extends Config(
-  new WithNKBL3(4 * 1024, inclusive = false, banks = 4, ways = 8, core_num = n)
-    ++ new WithNKBL2(256, inclusive = false, banks = 2, ways = 8, alwaysReleaseData = true)
+  new WithNKBL3(1024, inclusive = false, banks = 4, ways = 8, core_num = n)
+    ++ new WithNKBL2(128, inclusive = false, banks = 2, ways = 8, alwaysReleaseData = true)
     ++ new WithNKBL1D(64)
     ++ new BaseConfig(n)
 )
