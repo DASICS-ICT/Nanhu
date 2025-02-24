@@ -120,11 +120,6 @@ trait HasCSRConst {
   val DasicsUMainCfg = 0x9E0
   val DasicsUMainBoundLo = 0x9E2
   val DasicsUMainBoundHi = 0x9E3
-  
-  // SPMP
-  val SpmpSwitch    = 0x19F
-  val SpmpcfgBase   = 0x1A0
-  val SpmpaddrBase  = 0x1B0
 
   // Machine Information Registers
   val Mvendorid     = 0xF11

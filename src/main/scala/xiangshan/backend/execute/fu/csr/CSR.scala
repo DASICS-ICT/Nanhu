@@ -878,7 +878,6 @@ class CSR(implicit p: Parameters) extends FUWithRedirect
                 perfCntMapping ++
                 pmpMapping ++
                 pmaMapping ++
-                spmpMapping ++
                 mpkMapping ++
                 (if (HasFPU) fcsrMapping else Nil) ++
                 (if (HasCustomCSRCacheOp) cacheopMapping else Nil) ++ 

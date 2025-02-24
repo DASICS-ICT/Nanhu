@@ -4,8 +4,8 @@
 	branch = fdi-nh5
 [submodule "difftest"]
 	path = difftest
-	url = https://github.com/DASICS-ICT/difftest
-	branch = fdi-nh5
+	url = git@github.com:DASICS-ICT/difftest.git
+	branch = fdi-nh3-cherry-pick
 [submodule "ready-to-run"]
 	path = ready-to-run
 	url = https://github.com/Siudya/ready-to-run
