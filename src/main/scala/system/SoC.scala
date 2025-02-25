@@ -55,7 +55,7 @@ case class SoCParameters
   periHalfFreq:Boolean = true,
   hasMbist:Boolean = false,
   hasShareBus:Boolean = false,
-  hasRot:Boolean = true
+  hasRot:Boolean = false
 ){
   // L3 configurations
   val L3InnerBusWidth = 256
@@ -300,7 +300,7 @@ class SoCMiscImp(outer:SoCMisc)(implicit p: Parameters) extends LazyModuleImp(ou
   ROMInitEn := outer.periCx.module.ROMInitEn
 }
 
-class MiscPeriComplex(includeROT: Boolean=true)(implicit p: Parameters) extends LazyModule with HasSoCParameter {
+class MiscPeriComplex(includeROT: Boolean=false)(implicit p: Parameters) extends LazyModule with HasSoCParameter {
   
   val tlrot_intr: Int = if (includeROT) {
     // ROT
