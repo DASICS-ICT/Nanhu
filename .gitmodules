@@ -19,8 +19,8 @@
 	branch = chisel5
 [submodule "xs-utils"]
 	path = xs-utils
-	url = https://github.com/Siudya/xs-utils
-	branch = chisel5
+	url = https://github.com/DASICS-ICT/xs-utils.git
+	branch = fdi-s2c
 [submodule "coupledL2"]
 	path = coupledL2
 	url = https://github.com/cyril0124/CoupledL2

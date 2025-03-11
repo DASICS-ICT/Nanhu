@@ -281,25 +281,28 @@ class SoCMiscImp(outer:SoCMisc)(implicit p: Parameters) extends LazyModuleImp(ou
   private val gt_ff = RegInit(true.B)
   gt_ff := ~gt_ff
 
-  private val clk_gt = if(outer.periHf) {
-    val cgt = Module(new STD_CLKGT_func)
-    cgt.io.E := gt_ff
-    cgt.io.TE := false.B
-    cgt.io.CK := clock
-    cgt.io.dft_l3dataram_clk := false.B
-    cgt.io.dft_l3dataramclk_bypass := false.B
-    Some(cgt)
-  } else {
-    None
-  }
+  // private val clk_gt = if(outer.periHf) {
+  //   val cgt = Module(new STD_CLKGT_func)
+  //   cgt.io.E := gt_ff
+  //   cgt.io.TE := false.B
+  //   cgt.io.CK := clock
+  //   cgt.io.dft_l3dataram_clk := false.B
+  //   cgt.io.dft_l3dataramclk_bypass := false.B
+  //   Some(cgt)
+  // } else {
+  //   None
+  // }
+  private val clk_gt = None
 
   outer.periCx.module.debug_module_io <> debug_module_io
   outer.periCx.module.ext_intrs := ext_intrs
-  if(outer.periHf){
-    outer.periCx.module.clock := clk_gt.get.io.Q
-  } else {
-    outer.periCx.module.clock := clock
-  }
+  // if(outer.periHf){
+  //   outer.periCx.module.clock := clk_gt.get.io.Q
+  // } else {
+  //   outer.periCx.module.clock := clock
+  // }
+  outer.periCx.module.clock := clock
+
   outer.periCx.module.reset := ResetGen(3, Some(dfx_reset))
   outer.periCx.module.dfx_reset := dfx_reset
   outer.periCx.module.rtc_clock := rtc_clock
